@@ -1,0 +1,5 @@
+# regenerate with: python make_synthetic.py / python demo_image.py ...
+output/
+samples/
+__pycache__/
+.pytest_cache/
