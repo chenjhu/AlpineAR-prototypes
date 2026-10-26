@@ -16,6 +16,7 @@ box to that app later.
 | 2 virtual box | `rule_of_thirds.py` | thirds of each stone along the wall -> blue *must* zone, white *allowed* zone, suggested stone length and depth, placement check |
 | overlay | `overlay.py` | top-view AR overlay in the visual language of the sketch + step panels |
 | demo | `demo_image.py` | photo(s) -> slide-ready step grid, overlay image, JSON |
+| layer by layer | `build_session.py`, `session_marks.json` | replays a photo sequence of a wall being built: locks each stone, checks every new one against the pair below |
 | test data | `make_synthetic.py`, `tests/` | fake top-view scenes and 15 unit tests |
 | history | [`PROTOTYPING_LOG.md`](PROTOTYPING_LOG.md), [`presentation/`](presentation/) | every iteration (problem -> fix -> result) and its before/after images, for the slides |
 
@@ -46,6 +47,22 @@ Each photo gives `output/<name>_steps.png` (input, Canny edges, difference
 from ground, stone mask, watershed split, stones + boxes, thirds, AR overlay,
 and placement check if `--after`), `output/<name>_ar.png` and
 `output/<name>.json`.
+
+## Layer by layer (build session)
+
+Take one photo after each step and name it after the step,
+`NN_L<layer>_<stones>` (e.g. `02_L0_C` = stone C added to layer 0). Then:
+
+```bash
+python build_session.py ../photos/01_L0_AB.jpeg ../photos/02_L0_C.jpeg \
+    ../photos/03_L1_D_2.jpeg ../photos/04_L1_E.jpeg ../photos/05_L2_F.jpeg
+```
+
+Layer-0 stones are found automatically. For stones on top, a window asks you
+to click around their outline (live green/red verdict, Enter = done). Clicks
+are saved in `session_marks.json`, so the next run replays them; add
+`--remark` to click again. Output: `output/session/` (one image per step,
+`overview.jpg`, `session.json`).
 
 ## Testing with real stones
 
@@ -137,7 +154,7 @@ less).
 4. Over-splitting is undone: the weakest split lines are merged until two
    stones are left. A real joint is a sharp, dark line (the shadow in the gap
    between stones); a cut through one stone, e.g. along its texture or a
-   crack, is weaker. Tuned on the first real photo (`../photos/stone1.jpeg`).
+   crack, is weaker. Tuned on the first real photo (`../photos/01_L0_AB.jpeg`).
 5. `--click` replaces step 3 with your seeds.
 
 ## Known limits / next iterations

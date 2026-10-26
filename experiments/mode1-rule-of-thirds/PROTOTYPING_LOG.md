@@ -4,6 +4,8 @@ How the rule-of-thirds prototype evolved, one iteration per section:
 problem -> cause -> change -> result. Images are in [`presentation/`](presentation/),
 prefixed with the iteration number (`it07c_...` = iteration 7, image c).
 Each section ends with a one-line **Say it** for the slides.
+Photo names: `stone1` = `../photos/01_L0_AB.jpeg`, `stone1-1` = `../photos/03_L1_D.jpeg`
+(renamed for the layer-by-layer sequence in iteration 9).
 
 | # | iteration | data | outcome |
 |---|---|---|---|
@@ -15,7 +17,7 @@ Each section ends with a one-line **Say it** for the slides.
 | 6 | **Side view -> top view** | synthetic | box now lies on the stones |
 | 7 | **First real photo** | `stone1.jpeg` | 3 fixes: merge rule, drawing scale, box angle |
 | 8 | **Real placement check** | `stone1` + `stone1-1` | alignment works; auto detection fails on same-colour stones -> tap fallback, depth needed |
-| 9 | Layer order / locking (proposed) | - | design for building layer by layer without depth |
+| 9 | **Layer by layer** (team idea, built) | `01`-`05` photo sequence, 6 stones, 3 layers | whole sequence runs; every new stone checked against the right pair; F borderline |
 
 ---
 
@@ -92,7 +94,7 @@ Each section ends with a one-line **Say it** for the slides.
 - **Images:** `it06a`-`it06e` (steps, AR overlay, diagonal wall, good and bad placement).
 - **Say it:** "Our first version thought in elevation; the real workflow is a top-down camera, so the box has to lie on the stones."
 
-## 7. First real photo (`stone1.jpeg`, two touching stones on a white table)
+## 7. First real photo (`stone1` = `01_L0_AB`, two touching stones on a white table)
 
 Three problems, three fixes:
 
@@ -123,7 +125,7 @@ Three problems, three fixes:
 
 - **Result:** `it07d` (all steps), `it07e` (final overlay).
 
-## 8. Placement check on real photos (`stone1` before, `stone1-1` after)
+## 8. Placement check on real photos (`stone1` before, `stone1-1` = `03_L1_D` after)
 
 **8a. The phone moved and turned 90 deg between the shots** (`it08a`)
 - My before/after comparison assumed a fixed phone.
@@ -168,7 +170,7 @@ Three problems, three fixes:
 - **Result (simulated taps around the outline):** "rule of thirds OK, 47% / 30%".
 - **Say it:** "The first user test showed our instruction was ambiguous, so we made the feedback live instead of explaining it better."
 
-## 9. Layer order / locking (proposed by the team, not built yet)
+## 9. Layer by layer: order and locking (team idea, then built)
 
 - **Idea:** build the wall step by step and let the app remember what is
   confirmed:
@@ -193,12 +195,53 @@ Three problems, three fixes:
   the new stone, searched only inside the expected zone.
 - **Say it:** "Instead of sensing depth, the app remembers the build order: every confirmed stone is locked, so each step only asks 'what is new, and is it in the zone?'"
 
+**9b. Built: `build_session.py`** (`it09a`-`it09c`)
+- **Test sequence:** 5 photos, one per step, named after the step
+  (`NN_L<layer>_<stones>`; the name stands in for the app's "step done"
+  button where the user confirms the layer):
+
+  ```
+  Layer 2:          [  F  ]              05_L2_F
+  Layer 1:      [  E  ][  D  ]           04_L1_E, 03_L1_D_2
+  Layer 0:   [  C  ][  A  ][  B  ]       02_L0_C, 01_L0_AB
+  ```
+- **How it works per step:** align to the previous photo -> map all locked
+  stones into the new photo -> find the new stone -> pick the open joint
+  below it that is closest -> rule-of-thirds check -> lock it (outline +
+  layer + which pair it bridges) -> show the zones that are still open.
+- **New layer-0 stones are found automatically** (C in step 2): they lie on
+  the table, so they differ in colour; the new one is the stone that
+  overlaps no locked stone. Higher layers use outline clicks, stored in
+  `session_marks.json` so the session replays without clicking.
+- **Alignment holds over the whole sequence** although the phone zoomed in
+  and out a lot between shots (scale 0.66-1.61): 178-266 matched features
+  per step, and stones stay sharp in the before/after blends.
+- **Results** (outlines of D, E, F estimated by Claude from gridded photos,
+  so +-a few %):
+  - D on A|B: OK, covers 52% of A / 31% of B
+  - E on C|A: OK, 51% of C / 38% of A
+  - F on E|D: OK but **borderline**, 35% of E / 36% of D. Chenjie expected F to
+    fail because it is a small stone: it is narrow along the wall and just
+    reaches the inner third of each stone below. The limit is 1/3 minus a
+    3% tolerance (~30%), so the estimated outline decides it.
+- **Readability fix:** showing used and next zones together was unreadable.
+  Each step now shows only the zone the new stone was checked against (or,
+  for a ground stone, the zones it opened); the overview shows the finished
+  wall coloured by layer.
+- **Rule insight visible in the images:** the zones over C|A and A|B overlap
+  on A's middle third. D's allowed zone ends where E's must zone begins, so
+  stones placed by the rule fit next to each other.
+- **Limits:** outlines from clicks are approximate; small alignment errors
+  accumulate over the chain (locked outlines drift a little by step 5);
+  stones are assumed not to move once locked.
+- **Say it:** "Six stones, three layers, five photos: the app tracks what is built and checks every new stone against the two it bridges, with no depth sensor."
+
 ---
 
 ## Next
 
 - More real photos: gap vs touching, diagonal wall, real ground (protocol in README).
 - Real `--ref-cm` measurements, to compare the cm values with a tape.
-- Build iteration 9 (layer order) as a small state machine, and try the
-  edge-based test (b) on `stone1` / `stone1-1`.
+- Redo the D/E/F outlines with real clicks (`--remark`) to settle F.
+- Try the edge-based test (b) to replace the clicks for upper layers.
 - Depth (LiDAR) only if the lightweight route is not enough.

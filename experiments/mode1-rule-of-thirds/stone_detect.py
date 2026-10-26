@@ -246,12 +246,12 @@ def detect_stones(bgr: np.ndarray, params: DetectParams | None = None,
     return Detection(stones=stones, debug=debug, scale=scale)
 
 
-def align_to(before: np.ndarray, after: np.ndarray,
-             min_inliers: int = 25) -> tuple[np.ndarray, np.ndarray]:
-    """Warp `after` into the view of `before` (handheld phone: it moved or
-    turned between the shots). SIFT features on the stone texture are matched
-    and a homography is fitted with RANSAC; the new stone has no partner
-    features and drops out as outliers. Returns (warped after, valid mask)."""
+def find_homography(src: np.ndarray, dst: np.ndarray,
+                    min_inliers: int = 25) -> np.ndarray:
+    """3x3 homography mapping pixels of photo `src` onto photo `dst` (handheld
+    phone: it moved, turned or zoomed between the shots). SIFT features on
+    the stone texture are matched and the homography is fitted with RANSAC;
+    a newly placed stone has no partner features and drops out as outliers."""
     def feats(im):
         s = min(1.0, 1200 / max(im.shape[:2]))
         g = cv2.cvtColor(cv2.resize(im, None, fx=s, fy=s, interpolation=cv2.INTER_AREA),
@@ -259,23 +259,36 @@ def align_to(before: np.ndarray, after: np.ndarray,
         kp, des = cv2.SIFT_create(4000).detectAndCompute(g, None)
         return np.float32([k.pt for k in kp]) / s, des
 
-    pa, da = feats(after)
-    pb, db = feats(before)
-    if da is None or db is None:
-        raise RuntimeError("no texture to align the before/after photos")
-    matches = cv2.BFMatcher().knnMatch(da, db, k=2)
+    ps, ds = feats(src)
+    pd, dd = feats(dst)
+    if ds is None or dd is None:
+        raise RuntimeError("no texture to align the photos")
+    matches = cv2.BFMatcher().knnMatch(ds, dd, k=2)
     good = [m for m, n in (x for x in matches if len(x) == 2) if m.distance < 0.75 * n.distance]
     if len(good) < min_inliers:
-        raise RuntimeError(f"before/after photos do not match ({len(good)} matches)")
-    src = pa[[m.queryIdx for m in good]]
-    dst = pb[[m.trainIdx for m in good]]
-    H, inl = cv2.findHomography(src, dst, cv2.RANSAC, 8.0)
+        raise RuntimeError(f"photos do not match ({len(good)} matches)")
+    H, inl = cv2.findHomography(ps[[m.queryIdx for m in good]], pd[[m.trainIdx for m in good]],
+                                cv2.RANSAC, 8.0)
     if H is None or inl.sum() < min_inliers:
-        raise RuntimeError("before/after photos could not be aligned")
+        raise RuntimeError("photos could not be aligned")
+    return H
+
+
+def align_to(before: np.ndarray, after: np.ndarray,
+             min_inliers: int = 25) -> tuple[np.ndarray, np.ndarray]:
+    """Warp `after` into the view of `before`. Returns (warped after, valid mask)."""
+    H = find_homography(after, before, min_inliers)
     size = (before.shape[1], before.shape[0])
     warped = cv2.warpPerspective(after, H, size)
     valid = cv2.warpPerspective(np.full(after.shape[:2], 255, np.uint8), H, size)
     return warped, valid
+
+
+def stone_from_points(points, hull: bool = True) -> Stone:
+    """Stone from an outline given as points: their convex hull (for a few
+    clicks) or, with hull=False, the points as they are (a full contour)."""
+    pts = np.asarray(points, np.float32).reshape(-1, 1, 2)
+    return _to_stone(cv2.convexHull(pts) if hull else pts, 1.0)
 
 
 def detect_placed_stone(before: np.ndarray, after: np.ndarray,

@@ -104,18 +104,23 @@ def draw_thirds_lines(img, r: ThirdsResult) -> None:
     dashed_line(img, r.to_image(r.joint, b0), r.to_image(r.joint, b1), BLUE, 2, 4, 4)
 
 
+def draw_zone(img, r: ThirdsResult) -> None:
+    """The box for the next stone: white = allowed, blue hatched = must cover."""
+    allowed_q, must_q = r.box(r.allowed), r.box(r.must)
+    blend_fill(img, allowed_q, WHITE, 0.4)
+    hatch(img, must_q, BLUE, spacing=14, thickness=4)
+    cv2.polylines(img, [_ipts(allowed_q)], True, WHITE, _t(img, 2), cv2.LINE_AA)
+    cv2.polylines(img, [_ipts(must_q)], True, BLUE, _t(img, 2), cv2.LINE_AA)
+
+
 def draw_ar(img, r: ThirdsResult, check: PlacementCheck | None = None,
             px_per_unit: float = 1.0, unit: str = "px") -> np.ndarray:
     """Top-view overlay a craftsperson would see on the phone: the box for
     the next stone lies on top of both base stones, across the joint."""
     out = img.copy()
-    allowed_q, must_q = r.box(r.allowed), r.box(r.must)
-
+    allowed_q = r.box(r.allowed)
     draw_thirds_lines(out, r)
-    blend_fill(out, allowed_q, WHITE, 0.4)
-    hatch(out, must_q, BLUE, spacing=14, thickness=4)
-    cv2.polylines(out, [_ipts(allowed_q)], True, WHITE, _t(out, 2), cv2.LINE_AA)
-    cv2.polylines(out, [_ipts(must_q)], True, BLUE, _t(out, 2), cv2.LINE_AA)
+    draw_zone(out, r)
     s = _k(out)
     for i, stone in enumerate((r.left, r.right)):
         x, y = stone.centroid
