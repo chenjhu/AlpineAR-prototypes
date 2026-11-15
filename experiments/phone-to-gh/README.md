@@ -54,18 +54,25 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 
 ## Found on the way
 
-- **Detection is on the edge for some photos.** `01_L0_AB` gives 2 stones at
-  full size but 3 at 1280 px / JPEG 85: the left stone splits along a crack.
-  Only 1 of 20 size/quality combinations does this, so it is not the size
-  or the compression; the detection itself sits on a threshold there.
-  Two other photos (`02_L0_C`, `05_L2_F`) also change count between full
-  size and 1280 px. This is why flow step 5 ("Are these the stones?") is
-  needed, and it is a task for the detection step, not for this transport.
-- Because the scale is taken from "the biggest stone" (`ref_cm`), a split
-  stone changes every area. Another reason to replace `ref_cm` with the
+- **A bug in the Mode 1 detection, fixed.** `01_L0_AB` gave 3 stones at
+  1280 px / JPEG 85 (the left stone split along a crack) instead of 2.
+  Cause: the step that merges over-split pieces also erased the border to
+  a third piece, which then touched nothing and could never be merged;
+  whether that happened depended on the merge order, so tiny pixel changes
+  flipped it. Fixed in `../mode1-rule-of-thirds/stone_detect.py`
+  (`_merge_weak_splits`). Over 20 photo sizes / JPEG qualities: `01_L0_AB`
+  20/20 correct (2 stones), `02_L0_C` 19/20 (3 stones; 4032 px at JPEG 85
+  gives 2). Mode 1 tests still pass.
+- **`stones` must be right.** The detection merges pieces until this many
+  stones are left: `01_L0_AB` needs 2, `02_L0_C` needs 3. It is a Panel in
+  Grasshopper, not in the message (the phone does not know it). Flow step 5
+  ("Are these the stones?") stays needed for the cases that still go wrong.
+- Photos of higher layers (`03`–`05`, stones on top of stones) are not for
+  this single-photo detection; Mode 1 finds a placed stone from a
+  before/after pair.
+- Because the scale is taken from "the biggest stone" (`ref_cm`), a wrong
+  outline changes every area. Another reason to replace `ref_cm` with the
   camera height (or a marker).
-- `stones` (how many stones are expected) is a Panel in Grasshopper, not
-  in the message: the phone does not know it.
 - Grasshopper on macOS: opening a second .gh from a script while another
   has unsaved changes pops up a save dialog that blocks Rhino. So
   `build_gh_file.py` only saves the file; open it yourself.

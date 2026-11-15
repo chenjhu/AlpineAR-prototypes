@@ -1,14 +1,12 @@
 --- receive photo
 listening on broker.hivemq.com 'alpinear/proto1/photo' (connected)
-last photo photo_20261115_211036.jpg, 189 kB, ref_cm 45, received 21:10:36
+last photo photo_20261115_211952.jpg, 168 kB, ref_cm 45, received 21:19:56
 --- detect
-3 stones from photo_20261115_211036.jpg -> /Users/chenjiehu/Library/CloudStorage/OneDrive-Personal/16_HS 2627/AlpineARchitecture/04_projects/AlpineAR-prototypes/experiments/phone-to-gh/demo/inbox/photo_20261115_211036.json
-  stone 0: area 1082.8 cm2, 75 points
-  stone 1: area 832.8 cm2, 44 points
-  stone 2: area 702.8 cm2, 57 points
+2 stones from photo_20261115_211952.jpg -> /Users/chenjiehu/Library/CloudStorage/OneDrive-Personal/16_HS 2627/AlpineARchitecture/04_projects/AlpineAR-prototypes/experiments/phone-to-gh/demo/inbox/photo_20261115_211952.json
+  stone 0: area 972.5 cm2, 114 points
+  stone 1: area 815.1 cm2, 100 points
 --- receive contours
-3 stones from photo photo_20261115_211036.jpg, unit cm
-stone 0: area GH 1082.9 / Python 1082.8 cm2 (same), 75 points
-stone 1: area GH 832.8 / Python 832.8 cm2 (same), 44 points
-stone 2: area GH 702.8 / Python 702.8 cm2 (same), 57 points
-PASS: photo photo_20261115_211036.jpg -> 3 closed curves
+2 stones from photo photo_20261115_211952.jpg, unit cm
+stone 0: area GH 972.6 / Python 972.5 cm2 (same), 114 points
+stone 1: area GH 815.1 / Python 815.1 cm2 (same), 100 points
+PASS: photo photo_20261115_211952.jpg -> 2 closed curves
