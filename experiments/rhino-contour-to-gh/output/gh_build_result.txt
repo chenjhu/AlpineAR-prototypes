@@ -1,0 +1,7 @@
+info:
+2 stones from photo 01_L0_AB.jpeg, unit cm
+stone 0: area GH 928.3 / Python 928.3 cm2 (same), 275 points
+stone 1: area GH 743.9 / Python 743.9 cm2 (same), 217 points
+contours: 2, centroids: 2
+saved /tmp/contour2gh/demo/receive_contours.gh: True
+opened in Grasshopper

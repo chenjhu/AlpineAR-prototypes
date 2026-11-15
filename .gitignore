@@ -221,3 +221,9 @@ __marimo__/
 
 # macOS Finder
 .DS_Store
+
+# Rhino lock files (written while a .3dm is open)
+*.rhl
+
+# Photos received over MQTT (phone-to-gh)
+experiments/phone-to-gh/demo/inbox/

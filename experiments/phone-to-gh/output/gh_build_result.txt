@@ -1,0 +1,12 @@
+--- listening on broker.hivemq.com 'alpinear/proto1/photo' (connected)
+last photo photo_20261115_205920.jpg, 168 kB, ref_cm 45, received 20:59:23
+--- 3 stones from photo_20261115_205920.jpg -> /Users/chenjiehu/Library/CloudStorage/OneDrive-Personal/16_HS 2627/AlpineARchitecture/04_projects/AlpineAR-prototypes/experiments/phone-to-gh/demo/inbox/photo_20261115_205920.json
+  stone 0: area 1293.0 cm2, 111 points
+  stone 1: area 1089.2 cm2, 87 points
+  stone 2: area 422.4 cm2, 66 points
+--- 3 stones from photo photo_20261115_205920.jpg, unit cm
+stone 0: area GH 1293.1 / Python 1293.0 cm2 (same), 111 points
+stone 1: area GH 1089.1 / Python 1089.2 cm2 (same), 87 points
+stone 2: area GH 422.4 / Python 422.4 cm2 (same), 66 points
+saved /Users/chenjiehu/Library/CloudStorage/OneDrive-Personal/16_HS 2627/AlpineARchitecture/04_projects/AlpineAR-prototypes/experiments/phone-to-gh/demo/phone_to_gh.gh: True
+now open it in Grasshopper: File > Open > demo/phone_to_gh.gh

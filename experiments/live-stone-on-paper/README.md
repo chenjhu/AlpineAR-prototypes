@@ -1,21 +1,21 @@
-# Live stone outline on a hand-held sheet of paper
+# Live stone outline (stone on a sheet of white paper)
 
-Hold a white sheet of paper with one or more stones on it in front of the
-laptop camera. The prototype finds the paper, flattens it to a top view and
-draws the outline of every stone live, with its area in **cm²** and its size
-in **mm** (the known paper size gives the scale).
+Hold a stone on a sheet of white paper in front of the laptop camera. The
+prototype draws the stone's outline live. The paper is only there as a clean
+background: holding a stone in your fingers in front of a room is too busy to
+segment, while a stone on white paper is easy.
 
 It replaces [`archive/contour-detection/stone_contour.py`](../../archive/contour-detection/stone_contour.py),
-which only worked when the whole image border was plain background and could
-only measure in pixels.
+which only worked when the whole image border was plain background.
 
 | step | what happens |
 |---|---|
-| 1 paper | largest bright, low-saturation region -> convex hull -> 4 corners (a thumb on the edge only dents the hull) |
-| 2 rectify | perspective warp to a flat A4 at 2 px/mm, so tilting the paper does not change the measurement |
-| 3 stones | Lab colour distance to the paper colour (lightness weighted down so soft shadows count less); blobs that reach the paper edge are fingers and are dropped |
-| 4 smoothing | corners and mask are blended with the previous frames, so the outline is steady but still follows the stone |
-| 5 display | outlines mapped back into the camera image (left) + rectified paper with rotated boxes (right) |
+| 1 clean zone | largest bright, low-saturation region = the paper; its outline with holes filled is where a stone can be. Any shape: bent paper, a corner out of view and a hand in front are fine |
+| 2 stone score | Lab distance of each pixel to the paper colour; colour counts fully, lightness half, so the stone's soft shadow scores low |
+| 3 threshold | picked automatically per frame (Otsu inside the paper), so pale and dark stones both work |
+| 4 refine | GrabCut tightens each candidate's edge and separates it from its shadow; blobs touching the paper outline are fingers and are dropped |
+| 5 smoothing | the stone mask is blended with the previous frames, so the outline is steady but still follows the stone |
+| 6 cm / mm (optional) | only when the paper shows as a clean four-cornered sheet fully in view: the outline is mapped onto the known paper size (yellow corner dots = scale on) |
 
 ## Setup (macOS)
 
@@ -30,44 +30,50 @@ pip install -r requirements.txt
 ## Run
 
 ```bash
-python stone_on_paper.py
+python stone_on_paper.py --mirror
 ```
 
 Allow camera access when macOS asks (System Settings -> Privacy & Security ->
-Camera, for Terminal / VS Code). Useful options:
+Camera, for Terminal / VS Code; restart the app after allowing it).
 
 | option | |
 |---|---|
 | `--camera 1` | another camera (e.g. iPhone Continuity Camera) |
 | `--mirror` | flip the image like a mirror, easier when holding the paper towards yourself |
-| `--paper a5` | other paper size: `a3`, `a4` (default), `a5`, `letter` or `WxH` in mm, e.g. `200x150` |
+| `--paper a5` | paper size for cm/mm: `a3`, `a4` (default), `a5`, `letter` or `WxH` in mm |
+| `--no-refine` | skip GrabCut: faster, rougher edge |
 | `--record demo.mp4` | save the annotated view as a video (for the slides) |
+| `--record-raw raw.mp4` | save the plain camera video, without overlay - replay it with `--video raw.mp4` to tune settings |
 | `--video demo.mp4` | replay a recording instead of the live camera |
 | `--image photo.jpg --save out.png` | one photo in, annotated image out |
 
-Keys: **Q/Esc** quit, **M** show the mask (what counts as stone / paper),
-**Space** pause, **S** snapshot to `output/`, **R** reset tracking.
+Keys (click the video window first): **Q/Esc** quit, **M** show the mask
+(red) and the stone score (inset, bright = un-paper-like), **Space** pause,
+**S** snapshot to `output/`, **R** reset tracking. Ctrl+C in the terminal also
+stops it.
 
-Sliders: **Tolerance** - move right if paper texture or shadows show up as
-stone, left if parts of the stone are missing. **Paper white** - 0 picks the
-paper brightness automatically; set a value if the paper is not found in dim
-light. **Smoothing** - 0 follows every frame, 9 is very steady but lags.
+Sliders: leave them at their defaults first. **Threshold** - 0 is automatic
+(the value used is shown at the top); set a number only if auto picks up
+shadows (go higher) or misses parts of the stone (go lower). **Paper white** -
+0 is automatic; set a value if the paper is not found in dim light.
+**Smoothing** - 0 follows every frame, 9 is very steady but lags.
 
 ## Tips and limits
 
-- Use plain white, matte paper; hold it flat and keep all four corners in view
-  (one covered corner is usually fine).
-- Avoid a white wall or white shirt directly behind the paper: the largest
-  white region is taken as the paper.
-- Hold the paper at its edges. A stone that touches the paper edge, or touches
-  a finger, is treated as hand and dropped.
-- Stones that touch each other are one outline (no watershed split here; see
+- Matte white paper, even light. Keep the stone away from the paper edge: a
+  stone that touches the edge, or a finger, is dropped as "hand".
+- An off-white wall behind the paper is usually separated (the paper is
+  more neutral, and the most sheet-like region wins), but a pure white wall
+  or white shirt touching the paper can still merge with it.
+- Stones that touch each other give one outline (no watershed split here; see
   `mode1-rule-of-thirds/stone_detect.py` for that).
-- Very light / white stones have little contrast with the paper; lower the
-  Tolerance or use coloured paper (the detector models the paper colour, it
-  only needs to be uniform and brighter than the room for step 1).
-- 2D only: the area is the stone's outline seen from the camera, not its 3D
-  surface. Accuracy depends on the paper lying flat.
+- A white or very pale grey stone has almost no contrast with white paper.
+  Lower the Threshold slider; a dark sheet does not help, because step 1
+  looks for a bright sheet.
+- The outline is the stone's silhouette seen from the camera, not its contact
+  area. The cm/mm values assume a flat sheet and get less accurate the more the
+  camera looks at the paper from the side, because the stone sticks up out of
+  the paper plane.
 
 ## Test without a camera
 
@@ -75,6 +81,7 @@ light. **Smoothing** - 0 follows every frame, 9 is very steady but lags.
 python -m pytest tests
 ```
 
-The tests build a synthetic frame (tilted A4 in a cluttered room, a thumb on
-the edge, stones of known size) and check the paper corners, stone count and
-area (within 12 %).
+The tests build synthetic frames (tilted A4 in a cluttered room, a thumb on
+the edge, a pale beige stone with colours sampled from a real webcam frame, a
+sheet with one corner out of view) and check stone count, cm2 (within
+12-15 %) and that the scale switches off when a corner is missing.
