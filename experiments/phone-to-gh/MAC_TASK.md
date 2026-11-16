@@ -74,6 +74,25 @@ Useful for flow steps 4-7 (Grasshopper -> phone), not needed for this test.
   copying the APK over Google Drive. Each Unity change means a rebuild and
   a reinstall that way, so batch Unity changes.
 
+## Update 2026-11-16: test passed, next Mac step
+
+The end-to-end test above **passed** (see `README.md`). Then messages 2
+and 3 were defined in `MESSAGES.md`, and `python/fake_gh.py` sends
+message 2 / prints message 3, so Unity can do steps 4–5 alone
+(`UNITY_TASK.md`, round 2).
+
+**Next on the Mac:** the real Grasshopper side of steps 4–5, same output
+as `fake_gh.py`:
+- a component after "detect" that publishes message 2 from the detection
+  JSON (`photo_*.json` holds cm with y up; message 2 wants pixels of the
+  photo with y down: `x_px = x * px_per_unit`, `y_px = h - y * px_per_unit`,
+  as `fake_gh.py` / `presentation/e2e_phone_photo_20261116.jpg` do);
+- a receiver for message 3 (`ok` true → go on to step 6; false → wait for
+  a new photo). Same `compas_eve` pattern as `receive_photo.py`, with the
+  re-subscribe on reconnect.
+Then: Windows' round-2 build against the real Grasshopper instead of
+`fake_gh.py`.
+
 ## How to work
 
 Same rules as before: small steps, `MESSAGES.md` is the contract (change it

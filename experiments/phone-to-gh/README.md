@@ -100,6 +100,8 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 | `COURSE_PIPELINE.md` | the course tutorial's Grasshopper → Unity pipeline, summarised in text (the tutorial itself stays in OneDrive) |
 | `python/fake_phone.py` | sends one photo like the phone will |
 | `python/listen_photo.py` | checks what the phone sends against `MESSAGES.md` and saves the photo; needs only paho-mqtt, runs on Windows |
+| `python/fake_gh.py` | stands in for Grasshopper in steps 3–5: photo in → detection → outlines out (message 2), prints answers (message 3); runs on Windows |
+| `grasshopper/reload_scripts.py` | puts edited scripts into the open `.gh` and saves it (instead of re-opening the file) |
 | `unity/PhotoSender.cs` | copy of the Unity script (flow steps 1-2); the Unity project itself stays outside this repo |
 | `grasshopper/receive_photo.py` | GH: subscribe, save photo → `photo_path`, `ref_cm`, `info` |
 | `grasshopper/detect_photo.py` | GH: photo → `photo_*.json` via the Mode 1 detection |

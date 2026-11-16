@@ -44,30 +44,65 @@ over MQTT. The chart: [`../rhino-contour-to-gh/presentation/flow_gh_unity_split.
 
 | step | Unity | Grasshopper | status |
 |---|---|---|---|
-| 1–2 | button, photo, vibrate, **send photo** | | **your task now** |
-| 3 | | receive photo, detect stones → curves | built, tested with a fake phone |
-| 4–5 | show outlines, Yes/No | curves → points, send; receive answer | later |
+| 1–2 | button, photo, vibrate, send photo | | **done**, tested end to end (2026-11-16) |
+| 3 | | receive photo, detect stones → curves | **done**, tested end to end |
+| 4–5 | **receive outlines, show them on the photo, ask Yes/No, send answer** | send outlines, receive answer | **your task now** (GH side: `python/fake_gh.py` stands in) |
 | 6–7 | show zone + sound | rule of thirds (exists in Python, Mode 1) | later |
 | 8–10 | tap-photo of candidate, sound | fit check | later |
 | 11 | button | next round | later |
 
-## Your task: steps 1–2, nothing more
+## Your task now (round 2): A, then B
 
-In the existing course Unity project (COMPAS XR):
+Both go into **one** Unity build (each build = rebuild + reinstall via
+Google Drive). Read [`MAC_TASK.md`](MAC_TASK.md) section "What the Windows
+session found" first: that is what your last session learned about the
+course scene (one subscribed topic, `MqttManager` on ProtoBuf, ...).
 
-1. A button "Tap when in position".
-2. On tap: take a photo from the **camera feed** (not a screenshot: no
-   buttons or overlays drawn on it), straight down onto the stones.
-3. Encode it as JPEG, long side about 1280 px, then base64.
-4. Publish one message exactly as in [`MESSAGES.md`](MESSAGES.md), message 1:
-   topic `alpinear/proto1/photo`, plain JSON `{"photo": ..., "ref_cm": ..., "ts": ...}`,
-   broker `broker.hivemq.com:1883`.
-   `ref_cm` = real long side of the biggest stone in cm; for now a number
-   field on screen or a constant 45 is fine (it is a placeholder).
-5. Vibrate once the message is sent.
+### A. Two fixes to `PhotoSender.cs` (found in the end-to-end test)
 
-Not now: receiving anything, sounds, the Yes/No question, the stock
-check. Those come one by one, later.
+1. **Vibrate only when the photo really arrived.** Now it vibrates right
+   after handing the message to `MqttManager`. In the test the phone's MQTT
+   connection had dropped (the app was in the background a while), the app
+   still thought it was connected, vibrated, and the photo was lost; the
+   user had to restart the app. Publish with QoS 1 and vibrate on the
+   broker's acknowledgement (PUBACK); if none comes within a few seconds,
+   show "Not sent, tap again" and do not vibrate.
+2. **Reconnect when the connection is dead.** Re-establish the connection
+   before a send when it may be stale (e.g. the app came back to the
+   foreground), not only when `IsConnected` is false.
+
+### B. Flow steps 4–5: show the outlines, ask "Are these the stones?"
+
+Message formats: [`MESSAGES.md`](MESSAGES.md), messages 2 and 3.
+
+1. After sending a photo, wait for **message 2** on `alpinear/proto1/outlines`
+   (plain JSON). Keep the photo you sent (the JPEG / texture) and its `ts`;
+   ignore outlines whose `photo_ts` is not that `ts` (tolerance 0.001).
+   This topic is in addition to the course topic the app already
+   subscribes to, and it is JSON, not ProtoBuf.
+2. Show **the photo you took, full screen, with the outlines drawn on it**
+   (2D on the screen, not placed in AR: the phone has been taken away by
+   now). Outline points are pixels of that photo, origin **top-left**, y
+   **down**; a Unity texture has its origin bottom-left, so flip y. The
+   photo is landscape 1280 × 720; rotate it to fit the screen if needed.
+3. Two buttons: **"Are these the stones?" Yes / No**.
+4. On tap, send **message 3** on `alpinear/proto1/answer`:
+   `{"photo_ts": <that ts>, "ok": true|false, "ts": <now>}`.
+   - Yes → show "OK, waiting for the zone…" (steps 6–7 come later).
+   - No → back to step 1: the "Tap when in position" button again.
+5. If no outlines arrive within ~15 s: show "No answer from Grasshopper",
+   back to step 1.
+
+Not now: the zone (steps 6–7), sounds, the stone stock. Keep it small: one
+or two scripts, no extras.
+
+## Done in round 1 (steps 1–2)
+
+`unity/PhotoSender.cs` (copy of the Unity script): a "Tap when in position"
+button takes a photo from the AR camera feed (no UI), JPEG 1280 px,
+publishes message 1 as plain JSON over the scene's `MqttManager`, vibrates.
+Tested from a Pixel 8 (app GeoViewerAR1) with `listen_photo.py` and end to
+end with Grasshopper on the Mac.
 
 ## Where files live (Mac ↔ Windows)
 
@@ -91,14 +126,11 @@ check. Those come one by one, later.
 - **Read [`COURSE_PIPELINE.md`](COURSE_PIPELINE.md)**: what the course
   Grasshopper → Unity pipeline sends, and what its scripts say about the
   Unity side (e.g. `MqttManager` skips a message equal to the previous one).
-- **Look first.** The course Unity project already talks MQTT (the course
-  Grasshopper Publisher sends geometry to it; it mentions an `MqttManager`
-  and a `GeometryVisualizer`). Find how it connects and reuse that
-  connection instead of adding a second MQTT library. Tell the user what
-  you found before writing code.
+- **Look first.** Check how the scene receives messages today before
+  adding the outlines topic; tell the user your plan before writing code.
 - **Small and step by step.** The professor's feedback after the midterm:
   make it technically work, break it into steps, no "final product" full of
-  code that is not needed. One small script for this task is the goal.
+  code that is not needed.
 - **The message format is a contract.** Do not change topics or fields on
   your own. If something has to change, edit `MESSAGES.md` first and tell
   the user, because the Grasshopper side on the Mac reads the same file.
@@ -109,45 +141,32 @@ check. Those come one by one, later.
 On the Windows PC, in `experiments/phone-to-gh/python/`:
 
 ```
-pip install paho-mqtt
-python listen_photo.py
+pip install paho-mqtt opencv-python numpy
+python fake_gh.py --stones 2 --save
 ```
 
-It prints `OK` and saves `received_<time>.jpg` for every correct message,
-or `WRONG: <what is wrong>`. Done when: a tap on the phone gives `OK`, the
-saved photo is a clean top view of the stones (no UI on it), and the phone
-vibrated.
+`fake_gh.py` stands in for Grasshopper: it receives the phone's photo,
+detects the stones (same Mode 1 detection as Grasshopper, from
+`../mode1-rule-of-thirds/stone_detect.py` in this repo), sends message 2
+back and prints every answer (message 3). With `--save` it writes
+`check_<time>.jpg`: the photo with the outlines drawn from message 2, to
+compare with what the phone shows. Tested on the Mac: photo → 2 outlines
+→ answer, in under a second. `--stones` = how many stones (or stand-ins,
+e.g. computer mice) are in the photo.
 
-End-to-end (with the Mac): open `demo/phone_to_gh.gh` in Grasshopper with
-`listen` on; the photo from the phone should turn into stone curves there,
-exactly like with `python/fake_phone.py`. See [`README.md`](README.md).
+Done when, with `fake_gh.py` running and only the objects in the frame:
+1. tap → the phone vibrates (only if the photo really arrived, fix A1);
+2. the phone shows the photo with the outlines on the right places
+   (same as `check_<time>.jpg`);
+3. Yes / No → `fake_gh.py` prints `answer: ok=True` / `ok=False`;
+4. No → the phone is back at "Tap when in position".
 
-## Next Unity batch (found in the end-to-end test, 2026-11-16)
-
-Steps 1–2 are done and work end to end. Two fixes for `PhotoSender.cs`,
-to build together with the next Unity change (each change = rebuild +
-reinstall via Google Drive):
-
-1. **Vibrate only when the photo really arrived.** Now it vibrates right
-   after handing the message to `MqttManager`. In the test the phone's MQTT
-   connection had dropped (app was in the background a while), the app
-   still thought it was connected, vibrated, and the photo was lost.
-   Publish with QoS 1 and vibrate on the broker's acknowledgement, or show
-   "not sent" after a timeout.
-2. **Reconnect when the connection is dead.** Check / re-establish the
-   connection before each send (e.g. when the app comes back to the
-   foreground), not only when `IsConnected` is false.
-
-Also good to know: the user restarted the app to get it working again.
-
-## Ask the user if unclear
-
-- Android or iPhone? (An iPhone build needs a Mac with Xcode.)
-- Where is the Unity project, which Unity version, and does it build to
-  the phone already (e.g. the course tutorial scene)?
+`listen_photo.py` (only paho-mqtt) still checks message 1 on its own.
+Do not run `fake_gh.py` while Grasshopper on the Mac also sends outlines.
 
 ## When done, report
 
-What you changed (files), how you tested it (the `listen_photo.py`
-output), and anything that does not match `MESSAGES.md`. Commit only when
-the user asks.
+What you changed (files, and copy the scripts into `unity/`), how you
+tested it (the `fake_gh.py` output and what the phone showed), and
+anything that does not match `MESSAGES.md`. Update `MAC_TASK.md` for the
+Mac side. Commit only when the user asks.
