@@ -83,6 +83,7 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 |---|---|
 | `MESSAGES.md` | topics and JSON fields, phone ↔ Grasshopper. Change this first |
 | `UNITY_TASK.md` | handoff for the Unity side (a Claude session on the Windows PC): project, flow, split, where files live, the task for steps 1–2, how to test |
+| `MAC_TASK.md` | handoff back to the Mac: what the phone now sends, the end-to-end test, what was learned about the Unity side |
 | `COURSE_PIPELINE.md` | the course tutorial's Grasshopper → Unity pipeline, summarised in text (the tutorial itself stays in OneDrive) |
 | `python/fake_phone.py` | sends one photo like the phone will |
 | `python/listen_photo.py` | checks what the phone sends against `MESSAGES.md` and saves the photo; needs only paho-mqtt, runs on Windows |
