@@ -66,7 +66,9 @@ protobuf, no world coordinates.
 
 Status: format fixed; sent by `python/fake_gh.py` (stand-in for
 Grasshopper, tested on the Mac with the mouse photo). The real Grasshopper
-sender is the next Mac step.
+sender is the next Mac step. Unity receives it (`unity/OutlineReview.cs`)
+and draws the outlines over the live camera view; tested from the Pixel 8
+against `fake_gh.py`.
 
 ## 3. Answer "Are these the stones?": phone → Grasshopper
 
@@ -84,12 +86,47 @@ When: the person taps Yes or No (flow step 5).
 | `ts` | number | time of the tap |
 
 Status: format fixed; `python/fake_gh.py` prints the answers it receives.
-Grasshopper receiver not built yet.
+Grasshopper receiver not built yet. Unity sends it (`unity/OutlineReview.cs`),
+QoS 1; tested against `fake_gh.py`.
+
+## 4. Zone for the next stone: Grasshopper → phone
+
+Topic: `alpinear/proto1/zone`
+When: after an answer (message 3) with `ok: true` (flow step 6). The rule
+of thirds from Mode 1 (`../mode1-rule-of-thirds/rule_of_thirds.py`) on the
+two largest stones of that photo.
+
+```json
+{
+  "photo_ts": 1763297262.123,
+  "image_size": [1280, 720],
+  "max": [[300, 150], [900, 150], [900, 520], [300, 520]],
+  "min": [[480, 150], [720, 150], [720, 520], [480, 520]],
+  "note": "",
+  "ts": 1763297271.2
+}
+```
+
+| field | type | what |
+|---|---|---|
+| `photo_ts` | number | the photo the zone belongs to (as in message 2) |
+| `image_size` | [int, int] | width, height of that photo in pixels |
+| `max` | list of [int, int] | the **allowed** zone (Mode 1's white box): the next stone must stay inside it. Closed outline, pixels of that photo, origin top-left, y down (as in message 2) |
+| `min` | list of [int, int] | the **must** zone (Mode 1's blue box): the next stone must cover at least this |
+| `note` | string | empty when there is a zone; otherwise why not (e.g. `need two base stones, found 1`), and `max` / `min` are empty |
+| `ts` | number | time sent |
+
+Pixels, like message 2, because the phone draws the zone over the same
+view as the outlines (2D). Lengths in cm need the scale (camera height or
+a QR marker): not in this message yet.
+
+Status: format fixed; sent by `python/fake_gh.py`. Unity draws it
+(`unity/OutlineReview.cs`), tested from the Pixel 8 against `fake_gh.py`.
+Grasshopper sender not built yet.
 
 ## Planned (not built)
 
 | # | topic | direction | content |
 |---|---|---|---|
-| 4 | `alpinear/proto1/zone` | GH → phone | max and min contour (rule of thirds) |
 | 5 | `alpinear/proto1/candidate` | phone → GH | photo of a candidate stone, same fields as message 1 |
 | 6 | `alpinear/proto1/fit` | GH → phone | `{"result": "fits" \| "too_small" \| "too_big"}` |

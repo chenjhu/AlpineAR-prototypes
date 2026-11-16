@@ -1,24 +1,41 @@
 using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using Compas.Unity.Core.Mqtt;
+using System.Text;
+using System.Threading.Tasks;
+using Newtonsoft.Json;
 using Unity.Collections;
 using UnityEngine;
 using UnityEngine.XR.ARFoundation;
 using UnityEngine.XR.ARSubsystems;
+using uPLibrary.Networking.M2Mqtt;
+using uPLibrary.Networking.M2Mqtt.Messages;
 
 namespace Compas.GeoViewerXR
 {
     /// <summary>
     /// AlpineAR flow steps 1-2: a "Tap when in position" button takes a photo from the AR
-    /// camera feed (no UI drawn on it), sends it to Grasshopper as MESSAGES.md message 1 over
-    /// the scene's existing MqttManager connection, and vibrates once it is sent.
-    /// Add it to any object in the GeoViewer scene; it finds the camera and MQTT by itself.
+    /// camera feed (no UI drawn on it), sends it to Grasshopper as MESSAGES.md message 1, and
+    /// vibrates once the broker confirmed it got the photo.
+    ///
+    /// <para>It has its own MQTT connection for the alpinear/proto1/* topics (plain JSON). The
+    /// course MqttManager stays as it is: it decodes everything as ProtoBuf, keeps only one
+    /// subscribed topic and draws every message it receives, so the JSON topics are kept away
+    /// from it. Same M2Mqtt library, second connection.</para>
+    ///
+    /// Add it to any object in the GeoViewer scene; it finds the AR camera by itself.
     /// </summary>
     public class PhotoSender : MonoBehaviour
     {
-        // MESSAGES.md, message 1. Do not change here without changing MESSAGES.md first.
-        private const string Topic = "alpinear/proto1/photo";
+        // MESSAGES.md, messages 1-3. Do not change here without changing MESSAGES.md first.
+        public const string PhotoTopic = "alpinear/proto1/photo";
+        public const string OutlinesTopic = "alpinear/proto1/outlines";
+        public const string AnswerTopic = "alpinear/proto1/answer";
+        public const string ZoneTopic = "alpinear/proto1/zone";
+
+        public string brokerAddress = "broker.hivemq.com";
+        public int brokerPort = 1883;
 
         [Tooltip("Real long side of the biggest stone in the photo, in cm. Placeholder for the scale.")]
         public float refCm = 45f;
@@ -29,24 +46,63 @@ namespace Compas.GeoViewerXR
         [Range(1, 100)]
         public int jpegQuality = 85;
 
-        [Tooltip("Draw the button on screen. Turn off if a UI Button calls TakeAndSend instead.")]
+        [Tooltip("Seconds to wait for the broker's receipt (PUBACK) before saying 'Not sent'.")]
+        public float ackTimeout = 6f;
+
+        [Tooltip("Draw the button on screen. OutlineReview turns it off while it shows a photo.")]
         public bool showButton = true;
 
         [SerializeField] private ARCameraManager cameraManager;
-        [SerializeField] private MqttManager mqtt;
+        [SerializeField] private ARRaycastManager raycastManager;
+
+        /// <summary>
+        /// Height of the camera above the surface in the middle of the view, in cm, measured
+        /// when the last photo was taken (NaN if no surface was found). Not sent yet (step B2).
+        /// </summary>
+        public float LastHeightCm { get; private set; } = float.NaN;
+
+        /// <summary>Main thread: a photo reached the broker. The receiver now owns the texture.</summary>
+        public event Action<Texture2D, double> PhotoSent;
+
+        /// <summary>Main thread: the raw JSON of a message on <see cref="OutlinesTopic"/>.</summary>
+        public event Action<string> OutlinesReceived;
+
+        /// <summary>Main thread: the raw JSON of a message on <see cref="ZoneTopic"/>.</summary>
+        public event Action<string> ZoneReceived;
+
+        private const ushort KeepAliveSeconds = 20;
+        private const float ConnectTimeout = 10f;
+
+        private MqttClient _client;
+        private bool _connecting;
+        private bool _stale;  // the connection may be dead although IsConnected still says true
+        private readonly HashSet<ushort> _acked = new HashSet<ushort>();  // filled by the MQTT thread
+        private readonly ConcurrentQueue<(string topic, string json)> _incoming = new ConcurrentQueue<(string, string)>();
+
+        private static readonly List<ARRaycastHit> Hits = new List<ARRaycastHit>();
 
         private bool _busy;
         private bool _configChosen;
         private string _status = "";
+        private string _heightText = "";
         private GUIStyle _buttonStyle;
         private GUIStyle _labelStyle;
+
+        /// <summary>The line above the button.</summary>
+        public void ShowStatus(string text) => _status = text ?? "";
 
         private void Awake()
         {
             if (cameraManager == null) cameraManager = FindAnyObjectByType<ARCameraManager>();
-            if (mqtt == null) mqtt = FindAnyObjectByType<MqttManager>();
+            if (raycastManager == null) raycastManager = FindAnyObjectByType<ARRaycastManager>();
             if (cameraManager == null) Debug.LogError("PhotoSender: no ARCameraManager in the scene.", this);
-            if (mqtt == null) Debug.LogError("PhotoSender: no MqttManager in the scene.", this);
+            if (raycastManager == null) Debug.LogWarning("PhotoSender: no ARRaycastManager, no height.", this);
+        }
+
+        private void Start()
+        {
+            // Connect early, so the outlines topic is subscribed before the first photo goes out.
+            StartCoroutine(EnsureConnected());
         }
 
         private void OnEnable()
@@ -59,6 +115,82 @@ namespace Compas.GeoViewerXR
             if (cameraManager != null) cameraManager.frameReceived -= OnFirstFrame;
         }
 
+        private void OnApplicationPause(bool paused)
+        {
+            // After the app was in the background the connection often is dead, but the client
+            // only notices at its next keep-alive. Do not trust it: connect anew.
+            if (paused) _stale = true;
+            else StartCoroutine(EnsureConnected());
+        }
+
+        private void Update()
+        {
+            while (_incoming.TryDequeue(out (string topic, string json) m))
+            {
+                if (m.topic == OutlinesTopic) OutlinesReceived?.Invoke(m.json);
+                else ZoneReceived?.Invoke(m.json);
+            }
+
+            // Live reading while aiming, to check it against a tape measure.
+            if (showButton)
+            {
+                float height = MeasureHeight(out float tilt, out string source);
+                _heightText = float.IsNaN(height)
+                    ? $"Height: no surface found yet (move the phone a little)   tilt {tilt:0}°"
+                    : $"Height {height:0} cm ({source})   tilt {tilt:0}°";
+            }
+        }
+
+        /// <summary>
+        /// Height of the camera above the surface in the middle of the screen, in cm: the
+        /// vertical distance (AR world y is up) from the camera to the first upward-facing AR
+        /// plane hit by the ray through the screen centre (= the photo's centre). Falls back to
+        /// the plane extended past its detected edge, then to ARCore's feature points.
+        /// <paramref name="tilt"/> is how far the camera looks away from straight down, in degrees.
+        /// </summary>
+        private float MeasureHeight(out float tilt, out string source)
+        {
+            source = "";
+            tilt = float.NaN;
+            if (cameraManager == null) return float.NaN;
+
+            Transform cam = cameraManager.transform;
+            tilt = Vector3.Angle(cam.forward, Vector3.down);
+            if (raycastManager == null) return float.NaN;
+
+            var centre = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
+            (TrackableType type, string name)[] tries =
+            {
+                (TrackableType.PlaneWithinPolygon, "plane"),
+                (TrackableType.PlaneWithinInfinity, "plane, extended"),
+                (TrackableType.FeaturePoint, "points"),
+            };
+
+            foreach ((TrackableType type, string label) in tries)
+            {
+                if (!raycastManager.Raycast(centre, Hits, type)) continue;
+                foreach (ARRaycastHit hit in Hits)  // nearest first
+                {
+                    bool upward = type == TrackableType.FeaturePoint || Vector3.Dot(hit.pose.up, Vector3.up) > 0.9f;
+                    float height = (cam.position.y - hit.pose.position.y) * 100f;
+                    if (upward && height > 0f)
+                    {
+                        source = label;
+                        return height;
+                    }
+                }
+            }
+
+            return float.NaN;
+        }
+
+        private void OnDestroy()
+        {
+            MqttClient old = _client;
+            _client = null;
+            if (old != null) Task.Run(() => Close(old));
+        }
+
         /// <summary>Takes the photo and sends it. Can also be called from a UI Button's On Click.</summary>
         public void TakeAndSend()
         {
@@ -69,61 +201,169 @@ namespace Compas.GeoViewerXR
         {
             _busy = true;
 
-            // The course scene does not connect by itself (autoConnect is off).
-            if (!mqtt.IsConnected)
-            {
-                _status = "Connecting...";
-                if (GeoViewerHub.Instance != null) GeoViewerHub.Instance.Connect();
-                else mqtt.Connect();
-
-                float giveUpAt = Time.time + 10f;
-                while (!mqtt.IsConnected && Time.time < giveUpAt) yield return null;
-
-                if (!mqtt.IsConnected)
-                {
-                    _status = "No MQTT connection, try again";
-                    _busy = false;
-                    yield break;
-                }
-            }
-
-            byte[] jpg = CaptureJpg();
-            if (jpg == null)
+            // Take the photo first: the phone is in position now.
+            LastHeightCm = MeasureHeight(out float tilt, out string source);
+            Debug.Log($"PhotoSender: photo at height {LastHeightCm:0.0} cm ({source}), tilt {tilt:0.0}°");
+            Texture2D photo = CapturePhoto();
+            if (photo == null)
             {
                 _status = "No camera image yet, try again";
                 _busy = false;
                 yield break;
             }
 
-            var message = new Dictionary<string, object>
+            byte[] jpg = photo.EncodeToJPG(jpegQuality);
+            double ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+            string json = JsonConvert.SerializeObject(new Dictionary<string, object>
             {
                 { "photo", Convert.ToBase64String(jpg) },
                 { "ref_cm", refCm },
-                { "ts", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0 },
-            };
+                { "ts", ts },
+            });
 
-            // The scene's MqttManager is set to ProtoBuf for the geometry coming from Grasshopper,
-            // but MESSAGES.md wants plain JSON. Switch for this one message and back. Safe: the
-            // message is encoded right here, and incoming messages are decoded in MqttManager's
-            // Update, on this same main thread, so nothing is decoded in between.
-            SerializationProtocol before = mqtt.Protocol;
-            mqtt.Protocol = SerializationProtocol.Json;
-            try
+            _status = "Sending...";
+            bool arrived = false;
+            yield return PublishJson(PhotoTopic, json, ok => arrived = ok);
+
+            if (!arrived)
             {
-                mqtt.PublishToTopic(Topic, message);
-            }
-            finally
-            {
-                mqtt.Protocol = before;
+                Destroy(photo);
+                _status = "Not sent, tap again";
+                _busy = false;
+                yield break;
             }
 
             Handheld.Vibrate();
-            _status = $"Sent ({jpg.Length / 1024} kB)";
+            _status = float.IsNaN(LastHeightCm)
+                ? $"Sent ({jpg.Length / 1024} kB), no height"
+                : $"Sent ({jpg.Length / 1024} kB) at {LastHeightCm:0} cm";
             _busy = false;
+
+            if (PhotoSent != null) PhotoSent(photo, ts);
+            else Destroy(photo);
         }
 
-        /// <summary>The latest camera image (camera feed only, no UI), scaled down, as JPEG.</summary>
-        private byte[] CaptureJpg()
+        /// <summary>
+        /// Publishes plain JSON with QoS 1 and waits for the broker's receipt (PUBACK).
+        /// <paramref name="done"/> gets true only if the receipt came within <see cref="ackTimeout"/>.
+        /// </summary>
+        public IEnumerator PublishJson(string topic, string json, Action<bool> done)
+        {
+            yield return EnsureConnected();
+            if (_client == null)
+            {
+                done(false);
+                yield break;
+            }
+
+            ushort id;
+            try
+            {
+                id = _client.Publish(topic, Encoding.UTF8.GetBytes(json), MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, false);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"PhotoSender: publish to {topic} failed: {e.Message}");
+                _stale = true;
+                done(false);
+                yield break;
+            }
+
+            float giveUpAt = Time.realtimeSinceStartup + ackTimeout;
+            while (Time.realtimeSinceStartup < giveUpAt)
+            {
+                bool acked;
+                lock (_acked) acked = _acked.Remove(id);
+                if (acked)
+                {
+                    done(true);
+                    yield break;
+                }
+                yield return null;
+            }
+
+            Debug.LogWarning($"PhotoSender: no receipt from the broker for {topic}");
+            _stale = true;  // so the next try starts with a fresh connection
+            done(false);
+        }
+
+        /// <summary>Makes sure there is a live connection; opens a new one if not.</summary>
+        private IEnumerator EnsureConnected()
+        {
+            while (_connecting) yield return null;
+            if (_client != null && _client.IsConnected && !_stale) yield break;
+
+            _connecting = true;
+            MqttClient old = _client;
+            _client = null;
+            _stale = false;
+            lock (_acked) _acked.Clear();
+
+            // Connecting blocks, so it runs off the main thread.
+            Task<MqttClient> task = Task.Run(() => Open(old));
+            float giveUpAt = Time.realtimeSinceStartup + ConnectTimeout;
+            while (!task.IsCompleted && Time.realtimeSinceStartup < giveUpAt) yield return null;
+
+            if (task.Status == TaskStatus.RanToCompletion)
+            {
+                _client = task.Result;
+                Debug.Log($"PhotoSender: connected to {brokerAddress}, listening on {OutlinesTopic} and {ZoneTopic}");
+            }
+            else
+            {
+                string why = task.IsFaulted ? task.Exception.GetBaseException().Message : "timeout";
+                Debug.LogWarning($"PhotoSender: no connection to {brokerAddress} ({why})");
+                // If it still connects later, close it again.
+                task.ContinueWith(t => { if (t.Status == TaskStatus.RanToCompletion) Close(t.Result); });
+            }
+
+            _connecting = false;
+        }
+
+        // MQTT thread from here to OnMessage: no Unity calls.
+        private MqttClient Open(MqttClient old)
+        {
+            if (old != null) Close(old);
+
+            var client = new MqttClient(brokerAddress, brokerPort, false, null, null, MqttSslProtocols.None);
+            client.MqttMsgPublished += OnPublished;
+            client.MqttMsgPublishReceived += OnMessage;
+            byte result = client.Connect(Guid.NewGuid().ToString(), null, null, true, KeepAliveSeconds);
+            if (result != MqttMsgConnack.CONN_ACCEPTED) throw new Exception($"broker refused (code {result})");
+            client.Subscribe(new[] { OutlinesTopic, ZoneTopic },
+                new[] { MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE });
+            return client;
+        }
+
+        private void Close(MqttClient client)
+        {
+            client.MqttMsgPublished -= OnPublished;
+            client.MqttMsgPublishReceived -= OnMessage;
+            try
+            {
+                if (client.IsConnected) client.Disconnect();
+            }
+            catch (Exception)
+            {
+                // a dead connection may not close cleanly; it is dropped either way
+            }
+        }
+
+        private void OnPublished(object sender, MqttMsgPublishedEventArgs e)
+        {
+            if (e.IsPublished) lock (_acked) _acked.Add(e.MessageId);
+        }
+
+        private void OnMessage(object sender, MqttMsgPublishEventArgs e)
+        {
+            if (e.Topic == OutlinesTopic || e.Topic == ZoneTopic)
+            {
+                _incoming.Enqueue((e.Topic, Encoding.UTF8.GetString(e.Message)));
+            }
+        }
+
+        /// <summary>The latest camera image (camera feed only, no UI), scaled down.</summary>
+        private Texture2D CapturePhoto()
         {
             if (cameraManager == null || !cameraManager.TryAcquireLatestCpuImage(out XRCpuImage image))
             {
@@ -147,9 +387,7 @@ namespace Compas.GeoViewerXR
                 var texture = new Texture2D(size.x, size.y, TextureFormat.RGBA32, false);
                 image.Convert(conversion, texture.GetRawTextureData<byte>());
                 texture.Apply();
-                byte[] jpg = texture.EncodeToJPG(jpegQuality);
-                Destroy(texture);
-                return jpg;
+                return texture;
             }
         }
 
@@ -204,6 +442,8 @@ namespace Compas.GeoViewerXR
             }
 
             GUI.Label(labelRect, _status, _labelStyle);
+            var heightRect = new Rect(labelRect.x - w * 0.1f, labelRect.y - labelRect.height, w * 1.2f, labelRect.height);
+            GUI.Label(heightRect, _heightText, _labelStyle);
 
             GUI.enabled = !_busy;
             if (GUI.Button(buttonRect, _busy ? "Sending..." : "Tap when in position", _buttonStyle))

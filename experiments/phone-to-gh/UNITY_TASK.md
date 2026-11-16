@@ -46,12 +46,18 @@ over MQTT. The chart: [`../rhino-contour-to-gh/presentation/flow_gh_unity_split.
 |---|---|---|---|
 | 1–2 | button, photo, vibrate, send photo | | **done**, tested end to end (2026-11-16) |
 | 3 | | receive photo, detect stones → curves | **done**, tested end to end |
-| 4–5 | **receive outlines, show them on the photo, ask Yes/No, send answer** | send outlines, receive answer | **your task now** (GH side: `python/fake_gh.py` stands in) |
-| 6–7 | show zone + sound | rule of thirds (exists in Python, Mode 1) | later |
+| 4–5 | receive outlines, show them over the live camera view, ask Yes/No, send answer | send outlines, receive answer | Unity **done** (round 2, tested with `python/fake_gh.py`); GH side next on the Mac |
+| 6–7 | show zone + sound | rule of thirds (exists in Python, Mode 1) → message 4 | Unity **done** (round 3, tested with `fake_gh.py`, which runs the Mode 1 rule of thirds); GH side next on the Mac |
 | 8–10 | tap-photo of candidate, sound | fit check | later |
 | 11 | button | next round | later |
 
-## Your task now (round 2): A, then B
+## Round 2: A, then B (done 2026-11-16)
+
+Done: `unity/PhotoSender.cs` (A1, A2, own MQTT connection) and
+`unity/OutlineReview.cs` (B). One change against the text below, asked
+for by the user: the outlines are drawn **over the live camera view**, not
+on the photo shown full screen. Details in `MAC_TASK.md`, "Unity round 2
+done".
 
 Both go into **one** Unity build (each build = rebuild + reinstall via
 Google Drive). Read [`MAC_TASK.md`](MAC_TASK.md) section "What the Windows

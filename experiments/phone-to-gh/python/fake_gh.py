@@ -1,15 +1,17 @@
-"""Pretend to be Grasshopper for flow steps 3-5 (works on Windows too).
+"""Pretend to be Grasshopper for flow steps 3-6 (works on Windows too).
 
 Listens for photos (MESSAGES.md message 1), detects the stones with the
 same Mode 1 detection Grasshopper uses, and replies with their outlines
-(message 2). Prints every answer the phone sends (message 3). So the Unity
-side can test steps 4-5 without the Mac:
+(message 2). Prints every answer the phone sends (message 3); after a Yes
+it sends the rule-of-thirds zone for that photo (message 4). So the Unity
+side can test steps 4-7 without the Mac:
 
     pip install paho-mqtt opencv-python numpy
     python fake_gh.py --stones 2          # Ctrl+C to stop
 
 --save also writes check_<time>.jpg: the photo with the outlines drawn
-from message 2 itself, to compare with what the phone shows.
+from message 2 itself, to compare with what the phone shows, and
+zone_<time>.jpg with the zone of message 4 (white = max, blue = min).
 Do not run it while the real Grasshopper sends outlines too (two replies).
 """
 import argparse
@@ -24,30 +26,49 @@ import numpy as np
 import paho.mqtt.client as mqtt
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "mode1-rule-of-thirds"))
+from rule_of_thirds import compute_thirds, pick_base_pair  # noqa: E402
 from stone_detect import DetectParams, detect_stones  # noqa: E402
 
 BROKER = "broker.hivemq.com"
 PHOTO = "alpinear/proto1/photo"
 OUTLINES = "alpinear/proto1/outlines"
 ANSWER = "alpinear/proto1/answer"
+ZONE = "alpinear/proto1/zone"
 SIMPLIFY_PX = 1.5  # same as rhino-contour-to-gh/python/photo_to_json.py
 
 
 def outlines_message(img, photo_ts, stones):
-    """MESSAGES.md message 2 for one photo (BGR image)."""
+    """MESSAGES.md message 2 for one photo (BGR image), and the detected stones."""
     found = detect_stones(img, DetectParams(stones=stones)).stones
     out = []
     for i, s in enumerate(found):
         c = cv2.approxPolyDP(s.contour, SIMPLIFY_PX, True).reshape(-1, 2)
         out.append({"id": i, "outline": [[int(x), int(y)] for x, y in c]})
     h, w = img.shape[:2]
-    return {"photo_ts": photo_ts, "image_size": [w, h], "stones": out, "ts": time.time()}
+    return {"photo_ts": photo_ts, "image_size": [w, h], "stones": out, "ts": time.time()}, found
+
+
+def zone_message(photo_ts, image_size, found):
+    """MESSAGES.md message 4: the rule-of-thirds zone on the two largest stones."""
+    msg = {"photo_ts": photo_ts, "image_size": image_size, "max": [], "min": [], "note": ""}
+    try:
+        left, right, _ = pick_base_pair(found)
+        r = compute_thirds(left, right)
+        msg["max"] = [[int(round(x)), int(round(y))] for x, y in r.box(r.allowed)]
+        msg["min"] = [[int(round(x)), int(round(y))] for x, y in r.box(r.must)]
+    except ValueError as e:  # e.g. fewer than two stones
+        msg["note"] = str(e)
+    msg["ts"] = time.time()
+    return msg
 
 
 def draw(img, msg):
-    """The photo with the outlines of message 2 drawn on it."""
+    """The photo with the outlines of message 2 (or the zone of message 4) drawn on it."""
     img = img.copy()
-    for s in msg["stones"]:
+    for key, color in (("max", (255, 255, 255)), ("min", (255, 120, 0))):
+        if msg.get(key):
+            cv2.polylines(img, [np.int32(msg[key]).reshape(-1, 1, 2)], True, color, 3)
+    for s in msg.get("stones", []):
         pts = np.int32(s["outline"]).reshape(-1, 1, 2)
         cv2.polylines(img, [pts], True, (0, 0, 255), 3)
         x, y = pts.reshape(-1, 2).mean(axis=0)
@@ -61,6 +82,7 @@ def main():
     ap.add_argument("--broker", default=BROKER)
     ap.add_argument("--save", action="store_true", help="write check_<time>.jpg per photo")
     a = ap.parse_args()
+    photos = {}  # photo_ts -> (image, detected stones), for the zone after a Yes
 
     def on_message(client, userdata, m):
         stamp = time.strftime("%H:%M:%S")
@@ -68,10 +90,13 @@ def main():
             data = json.loads(m.payload)
             if m.topic == ANSWER:
                 print("%s answer: ok=%s for photo_ts %s" % (stamp, data.get("ok"), data.get("photo_ts")))
+                if data.get("ok") is True:
+                    send_zone(client, data["photo_ts"], stamp)
                 return
             jpg = np.frombuffer(base64.b64decode(data["photo"]), np.uint8)
             img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
-            msg = outlines_message(img, data["ts"], a.stones)
+            msg, found = outlines_message(img, data["ts"], a.stones)
+            photos[data["ts"]] = (img, found)
             client.publish(OUTLINES, json.dumps(msg), qos=1)
             print("%s photo %dx%d -> sent %d outlines (%s points)" % (
                 stamp, img.shape[1], img.shape[0], len(msg["stones"]),
@@ -83,12 +108,27 @@ def main():
         except Exception as e:  # keep listening
             print("%s message on %s ignored: %s: %s" % (stamp, m.topic, type(e).__name__, e))
 
+    def send_zone(client, photo_ts, stamp):
+        key = next((t for t in photos if abs(t - photo_ts) < 0.001), None)
+        if key is None:
+            print("         no photo with that photo_ts here, no zone sent")
+            return
+        img, found = photos[key]
+        msg = zone_message(key, [img.shape[1], img.shape[0]], found)
+        client.publish(ZONE, json.dumps(msg), qos=1)
+        print("%s zone sent: %s" % (stamp, msg["note"] or "max %d points, min %d points" % (
+            len(msg["max"]), len(msg["min"]))))
+        if a.save:
+            name = "zone_%s.jpg" % time.strftime("%Y%m%d_%H%M%S")
+            cv2.imwrite(name, draw(img, msg))
+            print("         drawn -> %s" % name)
+
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.on_message = on_message
     # subscribe again after every reconnect (the broker forgets subscriptions)
     client.on_connect = lambda c, u, f, rc, p=None: c.subscribe([(PHOTO, 1), (ANSWER, 1)])
     client.connect(a.broker, 1883)
-    print("fake Grasshopper on %s: photo -> outlines (stones=%d), printing answers. Ctrl+C to stop"
+    print("fake Grasshopper on %s: photo -> outlines (stones=%d), Yes -> zone. Ctrl+C to stop"
           % (a.broker, a.stones))
     try:
         client.loop_forever()

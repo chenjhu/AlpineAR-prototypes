@@ -57,15 +57,16 @@ Useful for flow steps 4-7 (Grasshopper -> phone), not needed for this test.
 - The course scene's `MqttManager` (compas-net-unity) is set to
   **ProtoBuf**. Whatever Grasshopper sends to the phone with the course
   Publisher should use the `protobuf` codec, which matches.
-- The phone sends message 1 as plain JSON by switching that `MqttManager`
-  to JSON for one message and back (`unity/PhotoSender.cs`); one MQTT
-  connection, no second library.
 - The app subscribes to **one** topic, set at runtime from the app's UI or
   a QR code (`GeoViewerHub.SetSubscribeTopic`), and draws every geometry
-  message it receives. Receiving `alpinear/proto1/outlines` (message 2) on
-  top of the course topic needs a small change on the Unity side.
-- `MqttManager.autoConnect` is off: the app connects when the user presses
-  connect, or on the first photo tap.
+  message it receives. Changing that topic clears all other subscriptions.
+- So since round 2 the `alpinear/proto1/*` messages (plain JSON) go over
+  a **second MQTT connection** that `unity/PhotoSender.cs` opens itself
+  (same M2Mqtt library). The course `MqttManager` is not touched any more
+  and never sees these topics. (Round 1 switched `MqttManager` to JSON for
+  one message; that is gone.)
+- `MqttManager.autoConnect` is off: the course connection starts when the
+  user presses connect. PhotoSender's own connection starts with the app.
 - The Unity project is a copy of the course project at
   `F:\ETH\AlpineArchitecture` on the PC (Unity 6000.0.79f1), not in this repo.
   The app is called GeoViewerAR1 (package `com.aha.GeoViewerAR1`) so it
@@ -92,6 +93,76 @@ as `fake_gh.py`:
   re-subscribe on reconnect.
 Then: Windows' round-2 build against the real Grasshopper instead of
 `fake_gh.py`.
+
+## Update 2026-11-16: Unity round 2 done (steps 4–5)
+
+Built on Windows and tested from the Pixel 8 against `python/fake_gh.py`
+(`--stones 2`, two computer mice): photo → vibrate → 2 outlines on the
+screen → Yes → `fake_gh.py` printed `answer: ok=True`, 3 runs, each a few
+seconds from tap to outlines. Messages 2 and 3 as in `MESSAGES.md`,
+nothing changed. **No** (`ok: false`) is built but has not been sent from
+the phone yet.
+
+What the phone does now (`unity/PhotoSender.cs`, `unity/OutlineReview.cs`):
+- **Vibrates only on the broker's receipt** (QoS 1, PUBACK within 6 s);
+  otherwise "Not sent, tap again". After the app was in the background it
+  connects anew (the stale connection of the end-to-end test).
+- Subscribes to `alpinear/proto1/outlines` from app start; ignores outlines
+  whose `photo_ts` is not its last photo; gives up after 15 s ("No answer
+  from Grasshopper").
+- Draws the outlines **over the live camera view**, where they were in the
+  photo (2D, fixed to the screen; the user preferred this to showing the
+  photo itself). They match the stones only while the phone stays where it
+  took the photo.
+- Yes → message 3 `ok: true`, "OK, waiting for the zone…", plus a "New
+  photo" button for testing. No → message 3 `ok: false`, back to "Tap when
+  in position".
+- The photo arrives landscape; on a portrait phone it is turned a quarter
+  **counterclockwise** to match the screen.
+
+For the real Grasshopper side: it only has to reply to the photo within
+15 s, with `photo_ts` copied from message 1 unchanged.
+
+## Update 2026-11-16: Unity round 3 done (steps 6–7), message 4 defined
+
+**Message 4 is new** (`alpinear/proto1/zone`, see `MESSAGES.md`): after a
+Yes, Grasshopper sends the rule-of-thirds zone of that photo: `max` = Mode
+1's white *allowed* box, `min` = the blue *must* box, as photo pixels like
+message 2, plus `note` when there is no zone. Defined on Windows, so check
+it before building the Grasshopper side.
+
+`python/fake_gh.py` now does it: on `ok: true` it runs
+`pick_base_pair` + `compute_thirds` from `../mode1-rule-of-thirds/` on the
+stones it detected in that photo and sends `r.box(r.allowed)` /
+`r.box(r.must)`. Tested on the Pixel 8 (two computer mice): Yes → white
+and blue box over the live view + a chime, 2 runs.
+
+The phone (`unity/OutlineReview.cs`) waits for the zone from the moment
+Yes is tapped (15 s): `fake_gh.py` answered so fast that the zone arrived
+before the broker's receipt for the Yes, and the first build dropped it.
+
+Who computes what: the rule of thirds belongs to Grasshopper. The phone
+only draws the two boxes it receives; `fake_gh.py` stands in for
+Grasshopper until it does this.
+
+**Next on the Mac** (adds to the list above): the real Grasshopper side
+of steps 4–6, same output as `fake_gh.py`:
+1. publish message 2 after "detect" (list above);
+2. receive message 3 (list above);
+3. on `ok: true`: rule of thirds on that photo's stones → publish
+   message 4. Like `detect_photo.py`, run the Mode 1 code with the Mode 1
+   venv (GH's Python has no OpenCV); the zone is in the same photo pixels
+   as the outlines, no scale needed.
+Then test the phone against Grasshopper instead of `fake_gh.py` (do not
+run both: two replies).
+
+Open on the phone side: the outlines and the zone are fixed to the
+screen, so they only match while the phone stays where it took the photo.
+The fix (outlines on the ground in AR, and the camera height for the scale)
+waits for a printed course QR marker (`QRLocalizer.cs`); the AR plane
+height alone did not match a tape measure well, and ARCore often did not
+find the surface at all. The marker's coordinates should fix both. (PhotoSender still shows
+that live height reading above its button, for checking; it is not sent.)
 
 ## How to work
 

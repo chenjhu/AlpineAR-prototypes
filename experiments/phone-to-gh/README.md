@@ -100,9 +100,10 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 | `COURSE_PIPELINE.md` | the course tutorial's Grasshopper → Unity pipeline, summarised in text (the tutorial itself stays in OneDrive) |
 | `python/fake_phone.py` | sends one photo like the phone will |
 | `python/listen_photo.py` | checks what the phone sends against `MESSAGES.md` and saves the photo; needs only paho-mqtt, runs on Windows |
-| `python/fake_gh.py` | stands in for Grasshopper in steps 3–5: photo in → detection → outlines out (message 2), prints answers (message 3); runs on Windows |
+| `python/fake_gh.py` | stands in for Grasshopper in steps 3–6: photo in → detection → outlines out (message 2), prints answers (message 3), after a Yes the rule-of-thirds zone (message 4); runs on Windows |
 | `grasshopper/reload_scripts.py` | puts edited scripts into the open `.gh` and saves it (instead of re-opening the file) |
-| `unity/PhotoSender.cs` | copy of the Unity script (flow steps 1-2); the Unity project itself stays outside this repo |
+| `unity/PhotoSender.cs` | copy of the Unity script (flow steps 1-2): photo, send, vibrate on the broker's receipt, its own MQTT connection; the Unity project itself stays outside this repo |
+| `unity/OutlineReview.cs` | copy of the Unity script (flow steps 4-7): outlines over the live camera view, Yes / No, then the zone (white / blue box) and a chime |
 | `grasshopper/receive_photo.py` | GH: subscribe, save photo → `photo_path`, `ref_cm`, `info` |
 | `grasshopper/detect_photo.py` | GH: photo → `photo_*.json` via the Mode 1 detection |
 | `grasshopper/build_gh_file.py` | builds `demo/phone_to_gh.gh` from the three scripts |
@@ -111,7 +112,9 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 ## Not done / limits
 
 - The public broker: anyone who knows the topic can read the photos.
-- One photo at a time; nothing is sent back to the phone yet (flow step 4–5).
+- One photo at a time. Grasshopper does not send the outlines or the zone
+  back to the phone yet (flow steps 4–6): the phone side is built, tested
+  with `fake_gh.py`.
 - After a network drop (e.g. the Mac slept) the receiver reconnects and
   subscribes again by itself. (Before 2026-11-16 it reconnected without
   re-subscribing: "connected" but no photos.) If in doubt, switch `listen`
