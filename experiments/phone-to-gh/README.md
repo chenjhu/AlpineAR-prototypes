@@ -1,11 +1,11 @@
-# Phone → Grasshopper: a photo over MQTT
+# Phone ↔ Grasshopper over MQTT
 
-Steps 1–3 of the basic prototype
-([chart](../rhino-contour-to-gh/presentation/flow_gh_unity_split.png)),
-the Grasshopper side only:
+Steps 1–7 of the basic prototype
+([chart](../rhino-contour-to-gh/presentation/flow_gh_unity_split.png)):
 
-> **A photo sent over MQTT arrives in Grasshopper, is saved, the stones are
-> detected, and their outlines appear as curves, with no button pressed.**
+> **A photo sent over MQTT arrives in Grasshopper, the stones are detected
+> and appear as curves; their outlines go back to the phone, and after the
+> person's Yes the rule-of-thirds zone for the next stone follows.**
 
 The course pipeline only goes GH → phone. This is the missing other
 direction. The phone is replaced by `python/fake_phone.py`, which sends
@@ -13,8 +13,11 @@ exactly what the Unity app will send, so the Unity side only has to follow
 [`MESSAGES.md`](MESSAGES.md).
 
 ```
-fake_phone.py ──MQTT──> [receive photo] ─> [detect] ─> [receive contours] ─> curves
- (later: Unity)          inbox/photo_*.jpg   photo_*.json    (from rhino-contour-to-gh)
+phone ──photo──> [receive photo] ─> [detect] ─> [receive contours] ─> curves in Rhino
+(or fake_phone.py) inbox/photo_*.jpg   │ photo_*.json, .outlines.json, .zone.json
+      <──outlines── [reply to phone] <─┘
+      ──Yes / No──>        │
+      <──zone (after Yes)──┘
 ```
 
 ## The step broken down
@@ -24,9 +27,10 @@ fake_phone.py ──MQTT──> [receive photo] ─> [detect] ─> [receive cont
 | 1 | Message format both sides follow | [`MESSAGES.md`](MESSAGES.md): plain JSON, photo as base64 JPEG, `ref_cm`, `ts` | done |
 | 2 | Pretend phone | `python/fake_phone.py`: resize to 1280 px, JPEG, paho-mqtt (no COMPAS, like Unity) | done |
 | 3 | Grasshopper listens | `grasshopper/receive_photo.py`: `compas_eve` Subscriber, same venv as the course Publisher; the MQTT thread saves the photo and asks GH to re-run | done |
-| 4 | Detect the stones | `grasshopper/detect_photo.py`: runs the existing `photo_to_json.py` with the Mode 1 venv (GH's Python has no OpenCV) | done |
+| 4 | Detect the stones | `grasshopper/detect_photo.py`: runs `python/replies.py` (Mode 1 detection + rule of thirds) with the Mode 1 venv (GH's Python has no OpenCV) | done |
 | 5 | Outlines → curves | `receive_contours.py` from `../rhino-contour-to-gh`, unchanged except: empty input → "no file yet" | done |
-| 6 | Unity sends the photo | `unity/PhotoSender.cs` in the course Unity project: AR camera image (no UI), JPEG 1280 px, sent as plain JSON over the scene's `MqttManager` | done, **tested end to end** (see below) |
+| 6 | Unity sends the photo | `unity/PhotoSender.cs` in the course Unity project: AR camera image (no UI), JPEG 1280 px, plain JSON, vibrates on the broker's receipt | done, **tested end to end** (see below) |
+| 7 | Outlines, Yes / No, zone (flow 4–7) | `grasshopper/reply_to_phone.py` sends messages 2 and 4, receives 3; `unity/OutlineReview.cs` draws them over the live camera view | done, **tested end to end** 2026-11-16 (`MAC_TASK.md`) |
 
 **End-to-end test, 2026-11-16:** a tap in the app GeoViewerAR1 (Pixel 8)
 → MQTT → Grasshopper on the Mac → 2 closed curves, one per object, areas
@@ -54,10 +58,12 @@ Each photo takes a few seconds from sending to curves.
 
    ```bash
    cd python
-   .venv/bin/python fake_phone.py ../../photos/01_L0_AB.jpeg --ref-cm 45
+   .venv/bin/python fake_phone.py ../../photos/01_L0_AB.jpeg --ref-cm 45 --answer yes --save
    ```
-3. After a few seconds the three Panels fill and the outlines appear in the
-   Rhino viewport (zoom extents). Send another photo: it updates by itself.
+3. After a few seconds the Panels fill and the outlines appear in the
+   Rhino viewport (zoom extents). `fake_phone.py` prints the outlines and
+   the zone that came back and saves `reply_<time>.jpg`. Send another
+   photo: it updates by itself.
 
 Needs the Mode 1 venv (`../mode1-rule-of-thirds/.venv`) for the detection.
 Photos and their JSON land in `demo/inbox/` (not in git).
@@ -98,23 +104,24 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 | `UNITY_TASK.md` | handoff for the Unity side (a Claude session on the Windows PC): project, flow, split, where files live, the task for steps 1–2, how to test |
 | `MAC_TASK.md` | handoff back to the Mac: what the phone now sends, the end-to-end test, what was learned about the Unity side |
 | `COURSE_PIPELINE.md` | the course tutorial's Grasshopper → Unity pipeline, summarised in text (the tutorial itself stays in OneDrive) |
-| `python/fake_phone.py` | sends one photo like the phone will |
+| `python/fake_phone.py` | sends one photo like the phone; `--answer yes\|no` also waits for the outlines, answers and waits for the zone (`--save`: picture of what came back) |
 | `python/listen_photo.py` | checks what the phone sends against `MESSAGES.md` and saves the photo; needs only paho-mqtt, runs on Windows |
+| `python/replies.py` | the replies to one photo: outlines (message 2) and rule-of-thirds zone (message 4). Run by `detect` in Grasshopper, imported by `fake_gh.py`, so both send the same |
 | `python/fake_gh.py` | stands in for Grasshopper in steps 3–6: photo in → detection → outlines out (message 2), prints answers (message 3), after a Yes the rule-of-thirds zone (message 4); runs on Windows |
 | `grasshopper/reload_scripts.py` | puts edited scripts into the open `.gh` and saves it (instead of re-opening the file) |
 | `unity/PhotoSender.cs` | copy of the Unity script (flow steps 1-2): photo, send, vibrate on the broker's receipt, its own MQTT connection; the Unity project itself stays outside this repo |
 | `unity/OutlineReview.cs` | copy of the Unity script (flow steps 4-7): outlines over the live camera view, Yes / No, then the zone (white / blue box) and a chime |
-| `grasshopper/receive_photo.py` | GH: subscribe, save photo → `photo_path`, `ref_cm`, `info` |
-| `grasshopper/detect_photo.py` | GH: photo → `photo_*.json` via the Mode 1 detection |
-| `grasshopper/build_gh_file.py` | builds `demo/phone_to_gh.gh` from the three scripts |
+| `grasshopper/receive_photo.py` | GH: subscribe, save photo → `photo_path`, `ref_cm`, `photo_ts`, `info` |
+| `grasshopper/detect_photo.py` | GH: photo → `photo_*.json` (curves), `.outlines.json`, `.zone.json` via `python/replies.py` |
+| `grasshopper/reply_to_phone.py` | GH: sends the outlines, receives the answer, sends the zone after a Yes |
+| `grasshopper/build_gh_file.py` | builds `demo/phone_to_gh.gh` from the four scripts |
 | `grasshopper/test_in_rhino.py` | after sending a photo: reads the open .gh, checks curves and areas → `output/rhino_result.txt` |
 
 ## Not done / limits
 
 - The public broker: anyone who knows the topic can read the photos.
-- One photo at a time. Grasshopper does not send the outlines or the zone
-  back to the phone yet (flow steps 4–6): the phone side is built, tested
-  with `fake_gh.py`.
+- One photo at a time. The zone is in photo pixels only (no cm yet), and
+  Rhino shows the stone curves but not the zone.
 - After a network drop (e.g. the Mac slept) the receiver reconnects and
   subscribes again by itself. (Before 2026-11-16 it reconnected without
   re-subscribing: "connected" but no photos.) If in doubt, switch `listen`

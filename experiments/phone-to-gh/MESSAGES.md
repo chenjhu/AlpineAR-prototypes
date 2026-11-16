@@ -64,11 +64,10 @@ the photo it took**, on the screen (2D), not placed in AR. Pixels can be
 drawn straight onto that photo; no Payload Prep (which skips curves), no
 protobuf, no world coordinates.
 
-Status: format fixed; sent by `python/fake_gh.py` (stand-in for
-Grasshopper, tested on the Mac with the mouse photo). The real Grasshopper
-sender is the next Mac step. Unity receives it (`unity/OutlineReview.cs`)
-and draws the outlines over the live camera view; tested from the Pixel 8
-against `fake_gh.py`.
+Status: Tested end to end on 2026-11-16 (Pixel 8 ↔ Grasshopper on the Mac, two runs, PASS). Grasshopper sends it (`grasshopper/reply_to_phone.py`; the
+message is made by `python/replies.py`, the same code `python/fake_gh.py`
+uses), under a second after the photo arrives. Unity receives it
+(`unity/OutlineReview.cs`) and draws the outlines over the live camera view.
 
 ## 3. Answer "Are these the stones?": phone → Grasshopper
 
@@ -85,9 +84,10 @@ When: the person taps Yes or No (flow step 5).
 | `ok` | bool | `true` = the outlines are right (Grasshopper goes on to step 6); `false` = wrong, the phone goes back to step 1 and takes a new photo |
 | `ts` | number | time of the tap |
 
-Status: format fixed; `python/fake_gh.py` prints the answers it receives.
-Grasshopper receiver not built yet. Unity sends it (`unity/OutlineReview.cs`),
-QoS 1; tested against `fake_gh.py`.
+Status: Yes tested end to end on 2026-11-16; No (`ok: false`) tested from
+`python/fake_phone.py --answer no` only. Unity sends it
+(`unity/OutlineReview.cs`), QoS 1; Grasshopper receives it
+(`grasshopper/reply_to_phone.py`, `info` Panel).
 
 ## 4. Zone for the next stone: Grasshopper → phone
 
@@ -120,9 +120,10 @@ Pixels, like message 2, because the phone draws the zone over the same
 view as the outlines (2D). Lengths in cm need the scale (camera height or
 a QR marker): not in this message yet.
 
-Status: format fixed; sent by `python/fake_gh.py`. Unity draws it
-(`unity/OutlineReview.cs`), tested from the Pixel 8 against `fake_gh.py`.
-Grasshopper sender not built yet.
+Status: Tested end to end on 2026-11-16 (Pixel 8 ↔ Grasshopper on the Mac, two runs, PASS). Grasshopper computes it with the photo's
+detection and sends it right after the Yes (`grasshopper/reply_to_phone.py`,
+made by `python/replies.py`); the same numbers as `fake_gh.py`. Unity draws
+it (`unity/OutlineReview.cs`).
 
 ## Planned (not built)
 

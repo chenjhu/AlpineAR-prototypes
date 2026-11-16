@@ -164,6 +164,39 @@ height alone did not match a tape measure well, and ARCore often did not
 find the surface at all. The marker's coordinates should fix both. (PhotoSender still shows
 that live height reading above its button, for checking; it is not sent.)
 
+## Update 2026-11-16: Grasshopper side of steps 4–6 done
+
+Built on the Mac and tested end to end with the Pixel 8 (two computer mice,
+Windows' `fake_gh.py` off): photo → outlines on the phone → Yes → zone +
+chime, 2 runs. Outlines under a second after the photo arrives, the zone
+right after the Yes. No (`ok: false`) was tested with `fake_phone.py`
+only (Grasshopper sends nothing, the Panel says so).
+
+How (`demo/phone_to_gh.gh`, rebuilt):
+- `python/replies.py` holds the code for messages 2 and 4. Both
+  Grasshopper and `fake_gh.py` use it, so they send the same thing
+  (checked: identical outlines and zone for the same photo).
+- `detect` runs it with the Mode 1 venv: it detects once and writes
+  `photo_*.json` (curves), `photo_*.outlines.json` (message 2) and
+  `photo_*.zone.json` (message 4) into `demo/inbox/`.
+- `receive photo` has a new output `photo_ts` (message 1's `ts`,
+  unchanged), which goes into messages 2 and 4.
+- New component `reply to phone` (`grasshopper/reply_to_phone.py`): sends
+  message 2 once per detection, listens for message 3, sends message 4
+  after a Yes. Its own MQTT connection, subscribes again on reconnect.
+- `python/fake_phone.py --answer yes|no [--save]` tests all this without
+  the phone.
+
+Found: after editing the scripts, the MQTT connection kept in Rhino's
+memory still ran the **old** callback (no `photo_ts`), so the phone
+ignored the replies. `build_gh_file.py` and `reload_scripts.py` now close
+those connections first.
+
+Open: the zone is in photo pixels only (no cm: the scale still waits for
+the QR marker / camera height); Rhino shows the stone curves but not the
+zone. Next in the flow: steps 8–10 (photo of a candidate stone, fit check,
+messages 5–6 in `MESSAGES.md`).
+
 ## How to work
 
 Same rules as before: small steps, `MESSAGES.md` is the contract (change it

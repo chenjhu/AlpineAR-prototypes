@@ -2,10 +2,13 @@
 """Build ../demo/phone_to_gh.gh and open it in Grasshopper:
 
   broker / topic / listen -> [receive photo] -> [detect] -> [receive contours] -> curves
-                                  info Panel     info Panel    info Panel
+                                  info Panel     info Panel  +  info Panel
+                                                     json_path +-> [reply to phone] -> outlines / zone to the phone
+                                                                   info Panel
 
 receive contours is ../../rhino-contour-to-gh/grasshopper/receive_contours.py,
-unchanged. Re-run after editing any of the three scripts. Writes
+unchanged. Re-run after editing any of the scripts (or, with the .gh open,
+use reload_scripts.py). Writes
 ../output/gh_build_result.txt.
 
 Run inside Rhino 8 (ScriptEditor > Run), or from a terminal (macOS):
@@ -19,6 +22,7 @@ import traceback
 import System
 import Rhino
 import Grasshopper
+import scriptcontext as sc
 from Grasshopper.Kernel import GH_Document, GH_DocumentIO, GH_ParameterSide
 from Grasshopper.Kernel.Special import GH_BooleanToggle, GH_Panel, GH_Scribble
 
@@ -73,13 +77,20 @@ def by_name(params, name):
 lines = []
 try:
     Rhino.RhinoApp.GetPlugInObject("Grasshopper")
+    # drop MQTT connections still running the old script code (kept in sticky)
+    for name in ("alpinear.receive_photo", "alpinear.reply_to_phone"):
+        state = sc.sticky.get(name, {})
+        if state.get("transport"):
+            state["transport"].close()
+        for k in ("subscriber", "transport", "key", "error"):
+            state.pop(k, None)
     os.makedirs(DEMO, exist_ok=True)
     doc = GH_Document()
     doc.FilePath = GH_PATH
 
     note = GH_Scribble()
-    note.Text = ("Phone -> Grasshopper (MESSAGES.md, message 1)\n"
-                 "Test without a phone: python/fake_phone.py photo.jpg --ref-cm 45")
+    note.Text = ("Phone <-> Grasshopper (MESSAGES.md, messages 1-4)\n"
+                 "Test without a phone: python/fake_phone.py photo.jpg --ref-cm 45 --answer yes")
     place(doc, note, 40, 10)
 
     broker = panel(doc, 40, 90, "broker", "broker.hivemq.com")
@@ -89,34 +100,43 @@ try:
     listen.Value = True
 
     rec = script(doc, os.path.join(HERE, "receive_photo.py"), "receive photo",
-                 ["broker", "topic", "listen"], ["photo_path", "ref_cm", "info"], 290, 110)
+                 ["broker", "topic", "listen"], ["photo_path", "ref_cm", "photo_ts", "info"], 290, 110)
     rec_info = panel(doc, 250, 230, "info", size=(330, 70))
 
     count = panel(doc, 440, 60, "stones", "2", size=(40, 22))
     det = script(doc, os.path.join(HERE, "detect_photo.py"), "detect",
-                 ["photo_path", "ref_cm", "stones"], ["json_path", "info"], 560, 100)
+                 ["photo_path", "ref_cm", "photo_ts", "stones"], ["json_path", "info"], 560, 100)
     det_info = panel(doc, 600, 230, "info", size=(330, 70))
 
     con = script(doc, RECEIVE_CONTOURS, "receive contours",
                  ["json_path", "refresh"], ["info", "contours", "centroids"], 860, 100)
     con_info = panel(doc, 950, 230, "info", size=(380, 70))
 
+    rep = script(doc, os.path.join(HERE, "reply_to_phone.py"), "reply to phone",
+                 ["broker", "json_path", "listen"], ["info"], 860, 340)
+    rep_info = panel(doc, 950, 450, "info", size=(420, 110))
+
     for src, dst in ((broker, rec.Params.Input[0]), (topic, rec.Params.Input[1]), (listen, rec.Params.Input[2]),
                      (by_name(rec.Params.Output, "photo_path"), det.Params.Input[0]),
                      (by_name(rec.Params.Output, "ref_cm"), det.Params.Input[1]),
-                     (count, det.Params.Input[2]),
-                     (by_name(det.Params.Output, "json_path"), con.Params.Input[0])):
+                     (by_name(rec.Params.Output, "photo_ts"), det.Params.Input[2]),
+                     (count, det.Params.Input[3]),
+                     (by_name(det.Params.Output, "json_path"), con.Params.Input[0]),
+                     (broker, rep.Params.Input[0]),
+                     (by_name(det.Params.Output, "json_path"), rep.Params.Input[1]),
+                     (listen, rep.Params.Input[2])):
         dst.AddSource(src)
     rec_info.AddSource(by_name(rec.Params.Output, "info"))
     det_info.AddSource(by_name(det.Params.Output, "info"))
     con_info.AddSource(by_name(con.Params.Output, "info"))
+    rep_info.AddSource(by_name(rep.Params.Output, "info"))
 
     doc.Enabled = True
     doc.NewSolution(True)
-    for comp in (rec, det, con):
+    for comp in (rec, det, con, rep):
         for m in comp.RuntimeMessages(Grasshopper.Kernel.GH_RuntimeMessageLevel.Error):
             lines.append("%s error: %s" % (comp.NickName, m))
-    for p in (rec_info, det_info, con_info):
+    for p in (rec_info, det_info, con_info, rep_info):
         lines.append("--- " + "\n".join(str(g) for g in p.VolatileData.AllData(True)))
 
     lines.append("saved %s: %s" % (GH_PATH, GH_DocumentIO(doc).SaveQuiet(GH_PATH)))

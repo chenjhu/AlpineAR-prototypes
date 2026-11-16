@@ -17,63 +17,20 @@ Do not run it while the real Grasshopper sends outlines too (two replies).
 import argparse
 import base64
 import json
-import sys
 import time
-from pathlib import Path
 
 import cv2
 import numpy as np
 import paho.mqtt.client as mqtt
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "mode1-rule-of-thirds"))
-from rule_of_thirds import compute_thirds, pick_base_pair  # noqa: E402
-from stone_detect import DetectParams, detect_stones  # noqa: E402
+# the same code Grasshopper runs (grasshopper/detect_photo.py -> replies.py)
+from replies import detect, draw, outlines_message, zone_message
 
 BROKER = "broker.hivemq.com"
 PHOTO = "alpinear/proto1/photo"
 OUTLINES = "alpinear/proto1/outlines"
 ANSWER = "alpinear/proto1/answer"
 ZONE = "alpinear/proto1/zone"
-SIMPLIFY_PX = 1.5  # same as rhino-contour-to-gh/python/photo_to_json.py
-
-
-def outlines_message(img, photo_ts, stones):
-    """MESSAGES.md message 2 for one photo (BGR image), and the detected stones."""
-    found = detect_stones(img, DetectParams(stones=stones)).stones
-    out = []
-    for i, s in enumerate(found):
-        c = cv2.approxPolyDP(s.contour, SIMPLIFY_PX, True).reshape(-1, 2)
-        out.append({"id": i, "outline": [[int(x), int(y)] for x, y in c]})
-    h, w = img.shape[:2]
-    return {"photo_ts": photo_ts, "image_size": [w, h], "stones": out, "ts": time.time()}, found
-
-
-def zone_message(photo_ts, image_size, found):
-    """MESSAGES.md message 4: the rule-of-thirds zone on the two largest stones."""
-    msg = {"photo_ts": photo_ts, "image_size": image_size, "max": [], "min": [], "note": ""}
-    try:
-        left, right, _ = pick_base_pair(found)
-        r = compute_thirds(left, right)
-        msg["max"] = [[int(round(x)), int(round(y))] for x, y in r.box(r.allowed)]
-        msg["min"] = [[int(round(x)), int(round(y))] for x, y in r.box(r.must)]
-    except ValueError as e:  # e.g. fewer than two stones
-        msg["note"] = str(e)
-    msg["ts"] = time.time()
-    return msg
-
-
-def draw(img, msg):
-    """The photo with the outlines of message 2 (or the zone of message 4) drawn on it."""
-    img = img.copy()
-    for key, color in (("max", (255, 255, 255)), ("min", (255, 120, 0))):
-        if msg.get(key):
-            cv2.polylines(img, [np.int32(msg[key]).reshape(-1, 1, 2)], True, color, 3)
-    for s in msg.get("stones", []):
-        pts = np.int32(s["outline"]).reshape(-1, 1, 2)
-        cv2.polylines(img, [pts], True, (0, 0, 255), 3)
-        x, y = pts.reshape(-1, 2).mean(axis=0)
-        cv2.putText(img, str(s["id"]), (int(x), int(y)), 0, 1.2, (0, 0, 255), 3)
-    return img
 
 
 def main():
@@ -95,7 +52,8 @@ def main():
                 return
             jpg = np.frombuffer(base64.b64decode(data["photo"]), np.uint8)
             img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
-            msg, found = outlines_message(img, data["ts"], a.stones)
+            found = detect(img, a.stones)
+            msg = outlines_message(found, img.shape[1::-1], data["ts"])
             photos[data["ts"]] = (img, found)
             client.publish(OUTLINES, json.dumps(msg), qos=1)
             print("%s photo %dx%d -> sent %d outlines (%s points)" % (
@@ -114,7 +72,7 @@ def main():
             print("         no photo with that photo_ts here, no zone sent")
             return
         img, found = photos[key]
-        msg = zone_message(key, [img.shape[1], img.shape[0]], found)
+        msg = zone_message(found, img.shape[1::-1], key)
         client.publish(ZONE, json.dumps(msg), qos=1)
         print("%s zone sent: %s" % (stamp, msg["note"] or "max %d points, min %d points" % (
             len(msg["max"]), len(msg["min"]))))

@@ -13,6 +13,7 @@ Inputs:
 Outputs:
   photo_path  the newest photo, saved as inbox/photo_<time>.jpg next to the .gh
   ref_cm      the scale sent with it (real long side of the biggest stone)
+  photo_ts    its ts, unchanged: the replies to the phone carry it back
   info        connected? / what arrived -> Panel
 
 The MQTT callback runs on a background thread: it only writes the file and
@@ -68,7 +69,7 @@ def on_message(message):
             raise ValueError("'photo' is not a JPEG")
         with open(path, "wb") as f:
             f.write(jpg)
-        state["last"] = {"path": path, "ref_cm": float(data["ref_cm"]),
+        state["last"] = {"path": path, "ref_cm": float(data["ref_cm"]), "ts": ts,
                          "kb": len(jpg) // 1024, "at": time.strftime("%H:%M:%S")}
         state.pop("error", None)
     except Exception as e:  # a wrong message must not kill the subscription
@@ -110,6 +111,7 @@ else:
 last = state.get("last")
 photo_path = last["path"] if last else None
 ref_cm = last["ref_cm"] if last else None
+photo_ts = last.get("ts") if last else None
 if last:
     lines.append("last photo %s, %d kB, ref_cm %g, received %s" % (
         os.path.basename(last["path"]), last["kb"], last["ref_cm"], last["at"]))
