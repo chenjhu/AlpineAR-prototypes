@@ -26,7 +26,7 @@ fake_phone.py ──MQTT──> [receive photo] ─> [detect] ─> [receive cont
 | 3 | Grasshopper listens | `grasshopper/receive_photo.py`: `compas_eve` Subscriber, same venv as the course Publisher; the MQTT thread saves the photo and asks GH to re-run | done |
 | 4 | Detect the stones | `grasshopper/detect_photo.py`: runs the existing `photo_to_json.py` with the Mode 1 venv (GH's Python has no OpenCV) | done |
 | 5 | Outlines → curves | `receive_contours.py` from `../rhino-contour-to-gh`, unchanged except: empty input → "no file yet" | done |
-| 6 | Unity sends the photo | a publisher in the Unity app, following `MESSAGES.md` | next (Windows) |
+| 6 | Unity sends the photo | `unity/PhotoSender.cs` in the course Unity project: AR camera image (no UI), JPEG 1280 px, sent as plain JSON over the scene's `MqttManager` | done, tested with `listen_photo.py` (end-to-end with GH not yet) |
 
 Tested in Rhino 8 + Grasshopper (macOS) on the public broker: two photos
 sent with `fake_phone.py` both arrived, Grasshopper re-ran on its own and
@@ -86,6 +86,7 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 | `COURSE_PIPELINE.md` | the course tutorial's Grasshopper → Unity pipeline, summarised in text (the tutorial itself stays in OneDrive) |
 | `python/fake_phone.py` | sends one photo like the phone will |
 | `python/listen_photo.py` | checks what the phone sends against `MESSAGES.md` and saves the photo; needs only paho-mqtt, runs on Windows |
+| `unity/PhotoSender.cs` | copy of the Unity script (flow steps 1-2); the Unity project itself stays outside this repo |
 | `grasshopper/receive_photo.py` | GH: subscribe, save photo → `photo_path`, `ref_cm`, `info` |
 | `grasshopper/detect_photo.py` | GH: photo → `photo_*.json` via the Mode 1 detection |
 | `grasshopper/build_gh_file.py` | builds `demo/phone_to_gh.gh` from the three scripts |
