@@ -26,7 +26,20 @@ fake_phone.py ──MQTT──> [receive photo] ─> [detect] ─> [receive cont
 | 3 | Grasshopper listens | `grasshopper/receive_photo.py`: `compas_eve` Subscriber, same venv as the course Publisher; the MQTT thread saves the photo and asks GH to re-run | done |
 | 4 | Detect the stones | `grasshopper/detect_photo.py`: runs the existing `photo_to_json.py` with the Mode 1 venv (GH's Python has no OpenCV) | done |
 | 5 | Outlines → curves | `receive_contours.py` from `../rhino-contour-to-gh`, unchanged except: empty input → "no file yet" | done |
-| 6 | Unity sends the photo | `unity/PhotoSender.cs` in the course Unity project: AR camera image (no UI), JPEG 1280 px, sent as plain JSON over the scene's `MqttManager` | done, tested with `listen_photo.py` (end-to-end with GH not yet) |
+| 6 | Unity sends the photo | `unity/PhotoSender.cs` in the course Unity project: AR camera image (no UI), JPEG 1280 px, sent as plain JSON over the scene's `MqttManager` | done, **tested end to end** (see below) |
+
+**End-to-end test, 2026-11-16:** a tap in the app GeoViewerAR1 (Pixel 8)
+→ MQTT → Grasshopper on the Mac → 2 closed curves, one per object, areas
+GH = Python (PASS). Two computer mice stood in for stones; the outlines
+match them closely ([photo with the outlines drawn back](presentation/e2e_phone_photo_20261116.jpg)).
+Found on the way:
+- the receiver was "connected" but deaf after the Mac's network dropped
+  overnight: fixed, it now subscribes again on every reconnect;
+- one tap vibrated but nothing arrived: the phone's own MQTT connection
+  had dropped and the app vibrates without a delivery confirmation;
+  restarting the app fixed it for now (Unity follow-up in `UNITY_TASK.md`);
+- everything in the frame is detected: a keyboard at the edge became a
+  third "stone". Only the stones may be in the photo.
 
 Tested in Rhino 8 + Grasshopper (macOS) on the public broker: two photos
 sent with `fake_phone.py` both arrived, Grasshopper re-ran on its own and
@@ -97,4 +110,9 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 
 - The public broker: anyone who knows the topic can read the photos.
 - One photo at a time; nothing is sent back to the phone yet (flow step 4–5).
-- If the connection drops, switch `listen` off and on.
+- After a network drop (e.g. the Mac slept) the receiver reconnects and
+  subscribes again by itself. (Before 2026-11-16 it reconnected without
+  re-subscribing: "connected" but no photos.) If in doubt, switch `listen`
+  off and on.
+- Editing a script while the .gh is open: run `grasshopper/reload_scripts.py`
+  instead of rebuilding and re-opening the file.

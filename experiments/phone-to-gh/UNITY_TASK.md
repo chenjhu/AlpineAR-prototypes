@@ -122,6 +122,24 @@ End-to-end (with the Mac): open `demo/phone_to_gh.gh` in Grasshopper with
 `listen` on; the photo from the phone should turn into stone curves there,
 exactly like with `python/fake_phone.py`. See [`README.md`](README.md).
 
+## Next Unity batch (found in the end-to-end test, 2026-11-16)
+
+Steps 1–2 are done and work end to end. Two fixes for `PhotoSender.cs`,
+to build together with the next Unity change (each change = rebuild +
+reinstall via Google Drive):
+
+1. **Vibrate only when the photo really arrived.** Now it vibrates right
+   after handing the message to `MqttManager`. In the test the phone's MQTT
+   connection had dropped (app was in the background a while), the app
+   still thought it was connected, vibrated, and the photo was lost.
+   Publish with QoS 1 and vibrate on the broker's acknowledgement, or show
+   "not sent" after a timeout.
+2. **Reconnect when the connection is dead.** Check / re-establish the
+   connection before each send (e.g. when the app comes back to the
+   foreground), not only when `IsConnected` is false.
+
+Also good to know: the user restarted the app to get it working again.
+
 ## Ask the user if unclear
 
 - Android or iPhone? (An iPhone build needs a Mac with Xcode.)

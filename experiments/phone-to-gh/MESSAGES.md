@@ -27,7 +27,8 @@ When: the person taps "Tap when in position" (flow steps 1–2).
 | `ref_cm` | number | the real length (long side) of the biggest stone in the photo, in cm. Placeholder for the scale until the phone sends its camera height |
 | `ts` | number | time of the photo, seconds since 1970 (Unix time) |
 
-Status: Grasshopper side built and tested with `python/fake_phone.py`.
+Status: tested end to end on 2026-11-16 (phone → Grasshopper curves, PASS).
+Grasshopper side built and tested with `python/fake_phone.py`.
 Unity side built (`unity/PhotoSender.cs`) and tested from a Pixel 8 with
 `python/listen_photo.py`: `OK`, 1280 x 720 photo, ~100 kB.
 

@@ -64,6 +64,8 @@ def on_message(message):
         name = "photo_%s.jpg" % time.strftime("%Y%m%d_%H%M%S", time.localtime(ts))
         path = os.path.join(state["inbox"], name)
         jpg = base64.b64decode(data["photo"])
+        if jpg[:2] != b"\xff\xd8":
+            raise ValueError("'photo' is not a JPEG")
         with open(path, "wb") as f:
             f.write(jpg)
         state["last"] = {"path": path, "ref_cm": float(data["ref_cm"]),
@@ -87,6 +89,10 @@ def start(host, topic_name):
     transport = MqttTransport(host, port=1883)
     subscriber = Subscriber(Topic(topic_name), callback=on_message, transport=transport)
     subscriber.subscribe()  # sent as soon as the connection is up
+    # paho reconnects by itself after a network drop (e.g. the Mac slept), but
+    # the broker forgets the subscription and compas_eve subscribes only once:
+    # then it is "connected" but deaf. So subscribe again on every (re)connect.
+    transport.on("ready", lambda *a, **k: transport.client.subscribe(topic_name))
     state.update(transport=transport, subscriber=subscriber, key=(host, topic_name))
 
 
