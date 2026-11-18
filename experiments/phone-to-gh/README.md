@@ -31,6 +31,7 @@ phone ──photo──> [receive photo] ─> [detect] ─> [receive contours] �
 | 5 | Outlines → curves | `receive_contours.py` from `../rhino-contour-to-gh`, unchanged except: empty input → "no file yet" | done |
 | 6 | Unity sends the photo | `unity/PhotoSender.cs` in the course Unity project: AR camera image (no UI), JPEG 1280 px, plain JSON, vibrates on the broker's receipt | done, **tested end to end** (see below) |
 | 7 | Outlines, Yes / No, zone (flow 4–7) | `grasshopper/reply_to_phone.py` sends messages 2 and 4, receives 3; `unity/OutlineReview.cs` draws them over the live camera view | done, **tested end to end** 2026-11-16 (`MAC_TASK.md`) |
+| 8 | Scale from the QR marker Tracker_10 | `python/qr_marker.py`: the printed marker in the photo → homography photo px → cm in its frame (x red, y green); its paper is covered before detection; messages 2 and 4 get cm fields (`MESSAGES.md`, "The scale") | done on the Mac, tested on a composite photo; **not yet on a real phone photo** |
 
 **End-to-end test, 2026-11-16:** a tap in the app GeoViewerAR1 (Pixel 8)
 → MQTT → Grasshopper on the Mac → 2 closed curves, one per object, areas
@@ -89,9 +90,41 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 - Photos of higher layers (`03`–`05`, stones on top of stones) are not for
   this single-photo detection; Mode 1 finds a placed stone from a
   before/after pair.
-- Because the scale is taken from "the biggest stone" (`ref_cm`), a wrong
-  outline changes every area. Another reason to replace `ref_cm` with the
-  camera height (or a marker).
+- Because the scale was taken from "the biggest stone" (`ref_cm`), a wrong
+  outline changed every area. Since 2026-11-18 the QR marker in the photo
+  gives the scale instead (no camera height needed); `ref_cm` is only the
+  fallback when no marker is found.
+- **The QR marker, 2026-11-18.** Tracker_10 (QR text `ID_10`): the black
+  QR square is 12.0 cm, the red line 14.8 cm (ruler); red and green meet
+  1.1 cm outside the QR's bottom-left corner (photo). OpenCV reads it at 720 px and in any rotation, with the
+  corners in the QR's own order. Its 4th corner (no finder square) was
+  about 5 % off and is now taken from the outline of the dark squares.
+  Test: the phone photo of the two mice (2026-11-16) with the cut paper
+  pasted in at the big mouse's scale (its 12.5 cm = 390 px), so only the
+  small mouse is an independent check: measured 11.6 x 6.7 cm, real
+  11.3 x 6.2 (big one 12.6 x 8.7, real 12.5 x 8.4). The paper was not
+  taken for a stone, also with 3 cm of uncut paper around the frame. On the user's photo of a folded A4
+  sheet the frame's far corner was ~0.9 cm off: the paper must lie flat.
+- **First phone photos with the marker, 2026-11-18** (two ~5 cm test rocks
+  touching, an uncut A4 sheet, 4 taps): the marker was found every time,
+  but the outlines were wrong. Things cut by the photo's edge (laptop,
+  keyboard, a knee) were taken as stones, so with `stones` = 2 the two
+  real rocks were merged into one; and the rocks were so small in the
+  photo (~2 % of it) that the detection's clean-up closed the gap between
+  them and a single rock fell under its "too small" limit. Fixed in
+  `python/replies.py` (Mode 1 unchanged): anything cut by the photo's edge
+  or touching the marker's printed square is painted over in the colour
+  of the ground around it and the detection runs again; with the marker
+  the detection's sizes are in cm (smallest stone 8 cm², clean-up 0.5 cm).
+  A first try painted the whole uncut sheet found by its colour: on a
+  light table it leaked over the table up to the stones and bent their
+  outlines (paper and table differ by only 14-24 in Lab), so it was
+  dropped. Next 3 photos (rocks away from the paper): both rocks found,
+  4.4 x 4.0 and 5.5 x 3.0 cm, the same within ~0.2 cm in all three. Still
+  wrong: the dark shadow in the narrow gap between the rocks is added to
+  one of them; soft shadows matter less. Photos where a rock touches the
+  uncut sheet lose that rock. Older photos give exactly the same outlines
+  as before, `01_L0_AB` / `02_L0_C` still 2 / 3 stones.
 - Grasshopper on macOS: opening a second .gh from a script while another
   has unsaved changes pops up a save dialog that blocks Rhino. So
   `build_gh_file.py` only saves the file; open it yourself.
@@ -106,6 +139,7 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 | `COURSE_PIPELINE.md` | the course tutorial's Grasshopper → Unity pipeline, summarised in text (the tutorial itself stays in OneDrive) |
 | `python/fake_phone.py` | sends one photo like the phone; `--answer yes\|no` also waits for the outlines, answers and waits for the zone (`--save`: picture of what came back) |
 | `python/listen_photo.py` | checks what the phone sends against `MESSAGES.md` and saves the photo; needs only paho-mqtt, runs on Windows |
+| `python/qr_marker.py` | finds the QR marker (Tracker_10) in a photo: photo px ↔ cm in its frame, covers its paper; `python qr_marker.py photo.jpg` draws what it found |
 | `python/replies.py` | the replies to one photo: outlines (message 2) and rule-of-thirds zone (message 4). Run by `detect` in Grasshopper, imported by `fake_gh.py`, so both send the same |
 | `python/fake_gh.py` | stands in for Grasshopper in steps 3–6: photo in → detection → outlines out (message 2), prints answers (message 3), after a Yes the rule-of-thirds zone (message 4); runs on Windows |
 | `grasshopper/reload_scripts.py` | puts edited scripts into the open `.gh` and saves it (instead of re-opening the file) |
@@ -120,8 +154,11 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 ## Not done / limits
 
 - The public broker: anyone who knows the topic can read the photos.
-- One photo at a time. The zone is in photo pixels only (no cm yet), and
-  Rhino shows the stone curves but not the zone.
+- One photo at a time. Rhino shows the stone curves (in cm, in the
+  marker's frame when it is in the photo) but not the zone.
+- With the marker: the paper flat and best cut; no stone touching it;
+  stone tops above the paper look a little bigger (parallax, ~10 % for
+  10 cm at 1 m), so lay the paper at the height of the stone tops.
 - After a network drop (e.g. the Mac slept) the receiver reconnects and
   subscribes again by itself. (Before 2026-11-16 it reconnected without
   re-subscribing: "connected" but no photos.) If in doubt, switch `listen`

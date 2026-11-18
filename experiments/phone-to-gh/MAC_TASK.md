@@ -197,6 +197,37 @@ the QR marker / camera height); Rhino shows the stone curves but not the
 zone. Next in the flow: steps 8–10 (photo of a candidate stone, fit check,
 messages 5–6 in `MESSAGES.md`).
 
+## Update 2026-11-18: the scale from the QR marker Tracker_10
+
+The scale (the "height" problem) is solved on the Mac without the camera
+height: the printed COMPAS XR marker **Tracker_10** lies flat in the photo
+and works as a ruler on the ground. Nothing changes on the phone.
+
+- `python/qr_marker.py` finds it (OpenCV QR, text `ID_10`) and gives a
+  homography photo px → cm in the marker's frame (origin where red meets
+  green, x red, y green; the course's `qr_frames`). Print layout: QR square
+  12.0 cm, red line 14.8 cm (ruler), origin 1.1 cm outside the QR corner.
+- `python/replies.py` covers the marker's paper before the detection,
+  writes `photo_*.json` in cm in that frame, and adds `qr`,
+  `stones[].outline_cm` to message 2 and `max_cm`, `min_cm`, `length_cm`,
+  `depth_cm` to message 4 (rule of thirds computed in cm). Only added
+  fields: the phone's current build is unaffected. No marker → as before.
+- Grasshopper: new Panel `qr_id` = 10 into `detect`. `fake_gh.py
+  --qr-id 10` (default) does the same.
+- Tested on a composite photo (the 2026-11-16 mice photo + the paper),
+  see `README.md`. **Not yet tested on a real phone photo.**
+
+Rules for the photo: the paper flat and best cut along the crop marks, next
+to the stones but not touching them, ideally at the height of the stone
+tops (parallax); things cut by the photo's edge are ignored; soft, even
+light (the dark gap between touching stones is added to one of them).
+First phone photos: see `README.md`, "First phone photos with the marker".
+
+Next: steps 8–10 (messages 5 and 6): candidate photo with the marker next
+to the stone, Grasshopper measures its length in cm against `length_cm`.
+Later on the phone: QRLocalizer with tracker 10 to put outlines and zone
+on the ground in AR, using the cm fields.
+
 ## How to work
 
 Same rules as before: small steps, `MESSAGES.md` is the contract (change it

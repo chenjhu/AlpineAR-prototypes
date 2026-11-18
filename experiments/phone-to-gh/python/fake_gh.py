@@ -36,10 +36,11 @@ ZONE = "alpinear/proto1/zone"
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("--stones", type=int, default=2, help="how many stones are in the photo")
+    ap.add_argument("--qr-id", type=int, default=10, help="the QR marker that gives the scale (0 = none)")
     ap.add_argument("--broker", default=BROKER)
     ap.add_argument("--save", action="store_true", help="write check_<time>.jpg per photo")
     a = ap.parse_args()
-    photos = {}  # photo_ts -> (image, detected stones), for the zone after a Yes
+    photos = {}  # photo_ts -> (image, detected stones, QR marker), for the zone after a Yes
 
     def on_message(client, userdata, m):
         stamp = time.strftime("%H:%M:%S")
@@ -52,13 +53,14 @@ def main():
                 return
             jpg = np.frombuffer(base64.b64decode(data["photo"]), np.uint8)
             img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
-            found = detect(img, a.stones)
-            msg = outlines_message(found, img.shape[1::-1], data["ts"])
-            photos[data["ts"]] = (img, found)
+            found, marker = detect(img, a.stones, a.qr_id)
+            msg = outlines_message(found, img.shape[1::-1], data["ts"], marker)
+            photos[data["ts"]] = (img, found, marker)
             client.publish(OUTLINES, json.dumps(msg), qos=1)
-            print("%s photo %dx%d -> sent %d outlines (%s points)" % (
+            print("%s photo %dx%d -> sent %d outlines (%s points), %s" % (
                 stamp, img.shape[1], img.shape[0], len(msg["stones"]),
-                "+".join(str(len(s["outline"])) for s in msg["stones"])))
+                "+".join(str(len(s["outline"])) for s in msg["stones"]),
+                "QR %d found, cm" % marker.qr_id if marker else "no QR, pixels only"))
             if a.save:
                 name = "check_%s.jpg" % time.strftime("%Y%m%d_%H%M%S")
                 cv2.imwrite(name, draw(img, msg))
@@ -71,11 +73,12 @@ def main():
         if key is None:
             print("         no photo with that photo_ts here, no zone sent")
             return
-        img, found = photos[key]
-        msg = zone_message(found, img.shape[1::-1], key)
+        img, found, marker = photos[key]
+        msg = zone_message(found, img.shape[1::-1], key, marker)
         client.publish(ZONE, json.dumps(msg), qos=1)
-        print("%s zone sent: %s" % (stamp, msg["note"] or "max %d points, min %d points" % (
-            len(msg["max"]), len(msg["min"]))))
+        print("%s zone sent: %s" % (stamp, msg["note"] or "max %d points, min %d points%s" % (
+            len(msg["max"]), len(msg["min"]),
+            ", next stone %.1f-%.1f cm long" % tuple(msg["length_cm"]) if msg["length_cm"] else "")))
         if a.save:
             name = "zone_%s.jpg" % time.strftime("%Y%m%d_%H%M%S")
             cv2.imwrite(name, draw(img, msg))

@@ -104,8 +104,9 @@ try:
     rec_info = panel(doc, 250, 230, "info", size=(330, 70))
 
     count = panel(doc, 440, 60, "stones", "2", size=(40, 22))
+    qr_id = panel(doc, 440, 20, "qr_id", "10", size=(40, 22))
     det = script(doc, os.path.join(HERE, "detect_photo.py"), "detect",
-                 ["photo_path", "ref_cm", "photo_ts", "stones"], ["json_path", "info"], 560, 100)
+                 ["photo_path", "ref_cm", "photo_ts", "stones", "qr_id"], ["json_path", "info"], 560, 100)
     det_info = panel(doc, 600, 230, "info", size=(330, 70))
 
     con = script(doc, RECEIVE_CONTOURS, "receive contours",
@@ -121,6 +122,7 @@ try:
                      (by_name(rec.Params.Output, "ref_cm"), det.Params.Input[1]),
                      (by_name(rec.Params.Output, "photo_ts"), det.Params.Input[2]),
                      (count, det.Params.Input[3]),
+                     (qr_id, det.Params.Input[4]),
                      (by_name(det.Params.Output, "json_path"), con.Params.Input[0]),
                      (broker, rep.Params.Input[0]),
                      (by_name(det.Params.Output, "json_path"), rep.Params.Input[1]),
