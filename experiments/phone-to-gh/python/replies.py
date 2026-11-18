@@ -1,5 +1,6 @@
 """Grasshopper's replies to one photo: the stone outlines (MESSAGES.md
-message 2) and the rule-of-thirds zone (message 4).
+message 2) and the rule-of-thirds zone (message 4) for a layer photo, or
+the fit check (message 6) for a candidate stone's photo (message 5).
 
 One place for this code, used by both
 - Grasshopper: grasshopper/detect_photo.py runs this file with the Mode 1
@@ -13,6 +14,10 @@ Detects once and writes next to the photo:
   photo.json           the stones in cm        -> "receive contours" (curves)
   photo.outlines.json  message 2               -> "reply to phone" sends it
   photo.zone.json      message 4               -> "reply to phone" sends it after a Yes
+
+    python replies.py cand.jpg --ts 1763297400.0 --layer-ts 1763297262.123 --zone photo.zone.json
+
+A candidate stone's photo instead: writes cand.fit.json (message 6).
 
 The scale: if the QR marker (--qr-id, see qr_marker.py) lies in the photo,
 everything in cm is in the marker's frame (x red, y green), the photo's tilt
@@ -135,6 +140,36 @@ def zone_message(found, image_size, photo_ts, marker=None):
     return msg
 
 
+def fit_message(found, marker, image_size, photo_ts, layer_ts, zone):
+    """Message 6: is the candidate (the stone nearest the photo's middle) as
+    long as the zone wants? `zone` = message 4 of the layer photo, or None."""
+    msg = {"photo_ts": photo_ts, "layer_ts": layer_ts, "result": "unknown",
+           "length_cm": None, "width_cm": None, "need_cm": zone.get("length_cm") if zone else None,
+           "image_size": list(image_size), "outline": [], "note": ""}
+    notes = []
+    if found:
+        middle = np.array(image_size, float) / 2
+        stone = min(found, key=lambda s: np.linalg.norm(np.array(s.centroid) - middle))
+        msg["outline"] = _px(_outline(stone))
+        if len(found) > 1:
+            notes.append("%d stones in the photo, took the one in the middle" % len(found))
+        if marker:
+            (_, _), (a, b), _ = cv2.minAreaRect(np.float32(marker.to_cm(stone.contour)))
+            msg["length_cm"], msg["width_cm"] = round(max(a, b), 1), round(min(a, b), 1)
+    if not marker:
+        notes.insert(0, "no QR marker in the photo, cannot measure")
+    elif not found:
+        notes.insert(0, "no stone found")
+    elif not msg["need_cm"]:
+        notes.insert(0, "no zone for this layer" + (": " + zone["note"] if zone and zone.get("note") else ""))
+    else:
+        lo, hi = msg["need_cm"]
+        msg["result"] = "too_short" if msg["length_cm"] < lo else "too_long" if msg["length_cm"] > hi else "fits"
+    msg["note"] = "; ".join(notes)
+    msg["ts"] = time.time()
+    return msg
+
+
 def stones_file(found, image_size, marker, ref_cm, source):
     """photo.json for "receive contours": the outlines in cm."""
     if marker is None:  # as before: the biggest stone's long side = ref_cm
@@ -173,16 +208,23 @@ def draw(img, msg):
 def main():
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("photo", type=Path)
-    ap.add_argument("--ts", type=float, required=True, help="the photo's ts from message 1")
+    ap.add_argument("--ts", type=float, required=True, help="the photo's ts from message 1 or 5")
     ap.add_argument("--stones", type=int, default=2, help="how many stones are in the photo")
-    ap.add_argument("--ref-cm", type=float, required=True,
-                    help="real length of the biggest stone in cm (only used without the QR marker)")
+    ap.add_argument("--ref-cm", type=float, help="layer photo: real length of the biggest stone in cm "
+                    "(only used without the QR marker)")
     ap.add_argument("--qr-id", type=int, default=10, help="the QR marker in the photo (0 = do not look)")
+    ap.add_argument("--zone", type=Path, help="candidate photo: the layer's .zone.json (message 4)")
+    ap.add_argument("--layer-ts", type=float, help="candidate photo: layer_ts from message 5")
     a = ap.parse_args()
 
     img = cv2.imread(str(a.photo))
     if img is None:
         sys.exit("cannot read %s" % a.photo)
+    if a.layer_ts is not None:
+        candidate(img, a)
+        return
+    if a.ref_cm is None:
+        sys.exit("a layer photo needs --ref-cm")
     found, marker = detect(img, a.stones, a.qr_id)
     if not found:
         sys.exit("no stones found" + ("" if marker else " (and no QR %d)" % a.qr_id))
@@ -210,6 +252,19 @@ def main():
             zone["length_cm"][0], zone["length_cm"][1], zone["depth_cm"]))
     else:
         print("zone: ready, pixels only (sent after a Yes)")
+
+
+def candidate(img, a):
+    """Flow step 9: one stone, its length against the zone -> photo.fit.json."""
+    found, marker = detect(img, 1, a.qr_id)
+    zone = json.loads(a.zone.read_text()) if a.zone and a.zone.is_file() else None
+    msg = fit_message(found, marker, img.shape[1::-1], a.ts, a.layer_ts, zone)
+    Path(str(a.photo.with_suffix("")) + ".fit.json").write_text(json.dumps(msg))
+    if msg["length_cm"] is not None:
+        print("candidate: %.1f x %.1f cm" % (msg["length_cm"], msg["width_cm"]))
+    print("result: %s%s%s" % (msg["result"],
+                              " (zone wants %.1f-%.1f cm)" % tuple(msg["need_cm"]) if msg["need_cm"] else "",
+                              ", " + msg["note"] if msg["note"] else ""))
 
 
 if __name__ == "__main__":

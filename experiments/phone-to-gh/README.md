@@ -32,6 +32,7 @@ phone ──photo──> [receive photo] ─> [detect] ─> [receive contours] �
 | 6 | Unity sends the photo | `unity/PhotoSender.cs` in the course Unity project: AR camera image (no UI), JPEG 1280 px, plain JSON, vibrates on the broker's receipt | done, **tested end to end** (see below) |
 | 7 | Outlines, Yes / No, zone (flow 4–7) | `grasshopper/reply_to_phone.py` sends messages 2 and 4, receives 3; `unity/OutlineReview.cs` draws them over the live camera view | done, **tested end to end** 2026-11-16 (`MAC_TASK.md`) |
 | 8 | Scale from the QR marker Tracker_10 | `python/qr_marker.py`: the printed marker in the photo → homography photo px → cm in its frame (x red, y green); its paper is covered before detection; messages 2 and 4 get cm fields (`MESSAGES.md`, "The scale") | done on the Mac, tested on a composite photo; **not yet on a real phone photo** |
+| 9 | Candidate stone, fit check (flow 8–10) | messages 5–6: `reply to phone` saves the candidate photo, runs `python/replies.py --layer-ts ... --zone ...` (one stone, length in cm vs the zone's `length_cm`) and sends `fits` / `too_short` / `too_long`; `fake_gh.py`, `fake_phone.py --candidate` do the same | Grasshopper done 2026-11-18, tested with `fake_phone.py` (two stones cut from a phone photo: `too_long` 6.0 cm, `fits` 4.3 cm, zone 2.8–5.0, reply in 0.4 s); Unity: `UNITY_TASK.md` round 4 |
 
 **End-to-end test, 2026-11-16:** a tap in the app GeoViewerAR1 (Pixel 8)
 → MQTT → Grasshopper on the Mac → 2 closed curves, one per object, areas
@@ -137,7 +138,7 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 | `UNITY_TASK.md` | handoff for the Unity side (a Claude session on the Windows PC): project, flow, split, where files live, the task for steps 1–2, how to test |
 | `MAC_TASK.md` | handoff back to the Mac: what the phone now sends, the end-to-end test, what was learned about the Unity side |
 | `COURSE_PIPELINE.md` | the course tutorial's Grasshopper → Unity pipeline, summarised in text (the tutorial itself stays in OneDrive) |
-| `python/fake_phone.py` | sends one photo like the phone; `--answer yes\|no` also waits for the outlines, answers and waits for the zone (`--save`: picture of what came back) |
+| `python/fake_phone.py` | sends one photo like the phone; `--answer yes\|no` also waits for the outlines, answers and waits for the zone (`--save`: picture of what came back); `--candidate stone.jpg` then the fit check |
 | `python/listen_photo.py` | checks what the phone sends against `MESSAGES.md` and saves the photo; needs only paho-mqtt, runs on Windows |
 | `python/qr_marker.py` | finds the QR marker (Tracker_10) in a photo: photo px ↔ cm in its frame, covers its paper; `python qr_marker.py photo.jpg` draws what it found |
 | `python/replies.py` | the replies to one photo: outlines (message 2) and rule-of-thirds zone (message 4). Run by `detect` in Grasshopper, imported by `fake_gh.py`, so both send the same |

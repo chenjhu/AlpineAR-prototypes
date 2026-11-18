@@ -11,6 +11,12 @@ after a yes, wait for the zone (message 4). --save then writes
 reply_<time>.jpg: the photo with the outlines and the zone that came back.
 
     .venv/bin/python fake_phone.py ../../photos/01_L0_AB.jpeg --ref-cm 45 --answer yes --save
+
+With --candidate (after --answer yes) it then sends a candidate stone's
+photo (message 5) for that zone and waits for the fit check (message 6),
+flow steps 8-10:
+
+    .venv/bin/python fake_phone.py layer.jpg --ref-cm 45 --answer yes --candidate stone.jpg
 """
 import argparse
 import base64
@@ -29,6 +35,8 @@ TOPIC = "alpinear/proto1/photo"
 OUTLINES = "alpinear/proto1/outlines"
 ANSWER = "alpinear/proto1/answer"
 ZONE = "alpinear/proto1/zone"
+CANDIDATE = "alpinear/proto1/candidate"
+FIT = "alpinear/proto1/fit"
 WAIT_S = 15  # like the phone
 LONG_SIDE = 1280  # px, like a phone would send (detection works at 640 px)
 
@@ -56,6 +64,8 @@ def main():
     ap.add_argument("--topic", default=TOPIC)
     ap.add_argument("--answer", choices=["yes", "no"],
                     help="then wait for the outlines and answer like the phone")
+    ap.add_argument("--candidate", type=Path,
+                    help="with --answer yes: then send this candidate stone's photo and wait for the fit check")
     ap.add_argument("--save", action="store_true",
                     help="with --answer: write reply_<time>.jpg with what came back")
     a = ap.parse_args()
@@ -68,7 +78,7 @@ def main():
     if a.answer:
         client.on_message = lambda c, u, m: inbox.put((m.topic, json.loads(m.payload)))
         client.on_subscribe = lambda c, u, mid, rc, p=None: inbox.put(("subscribed", None))
-        client.on_connect = lambda c, u, f, rc, p=None: c.subscribe([(OUTLINES, 1), (ZONE, 1)])
+        client.on_connect = lambda c, u, f, rc, p=None: c.subscribe([(OUTLINES, 1), (ZONE, 1), (FIT, 1)])
     client.connect(a.broker, 1883)
     client.loop_start()
     if a.answer:
@@ -96,6 +106,19 @@ def main():
             zone = wait_for(inbox, ZONE, msg["ts"], answered_at)
             print("zone after %.1f s: %s" % (time.time() - answered_at, zone["note"] or "max %s, min %s" % (
                 zone["max"], zone["min"])))
+        if ok and a.candidate:
+            cand, _ = photo_message(a.candidate, None)
+            cand.pop("ref_cm")
+            cand["layer_ts"] = msg["ts"]
+            cand_at = time.time()
+            client.publish(CANDIDATE, json.dumps(cand), qos=1).wait_for_publish(timeout=20)
+            print("sent candidate %s" % a.candidate.name)
+            fit = wait_for(inbox, FIT, cand["ts"], cand_at)
+            print("fit after %.1f s: %s%s%s" % (
+                time.time() - cand_at, fit["result"],
+                ", %.1f x %.1f cm" % (fit["length_cm"], fit["width_cm"]) if fit["length_cm"] is not None else "",
+                " (zone %.1f-%.1f cm)" % tuple(fit["need_cm"]) if fit["need_cm"] else "")
+                + (", " + fit["note"] if fit["note"] else ""))
         if a.save:
             from replies import draw  # the same drawing as fake_gh.py
             img = cv2.imdecode(np.frombuffer(base64.b64decode(msg["photo"]), np.uint8), cv2.IMREAD_COLOR)

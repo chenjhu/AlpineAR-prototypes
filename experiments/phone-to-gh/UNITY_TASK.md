@@ -28,8 +28,8 @@ fitting stone from the stone stock. Phone and laptop talk over MQTT.
    **max** (largest allowed) and the **min** (must at least cover).
 7. The phone shows both contours with a **sound**. From here the screen
    stays still (no AR tracking).
-8. The person walks to the stone stock and holds the phone over a
-   candidate stone, at the same height as in step 1, and taps.
+8. The person walks to the stone stock, lays the QR marker (Tracker_10)
+   next to a candidate stone, holds the phone over it and taps.
 9. Grasshopper checks: is the stone between the min and max contour?
 10. Fits → **sound**. Does not fit → try the next stone.
 11. Button **"New stone?"** → next round, back to 1.
@@ -48,8 +48,46 @@ over MQTT. The chart: [`../rhino-contour-to-gh/presentation/flow_gh_unity_split.
 | 3 | | receive photo, detect stones → curves | **done**, tested end to end |
 | 4–5 | receive outlines, show them over the live camera view, ask Yes/No, send answer | send outlines, receive answer | **done**, tested end to end with Grasshopper (2026-11-16) |
 | 6–7 | show zone + sound | rule of thirds (Mode 1) → message 4 | **done**, tested end to end with Grasshopper (2026-11-16) |
-| 8–10 | tap-photo of candidate, sound | fit check | later |
+| 8–10 | tap-photo of candidate, show result + sound | fit check (messages 5–6) | Grasshopper **done** 2026-11-18 (tested with `fake_phone.py`); **Unity: round 4 below** |
 | 11 | button | next round | later |
+
+## Round 4: flow steps 8–10, the candidate stone (to do)
+
+Message formats: [`MESSAGES.md`](MESSAGES.md), **messages 5 and 6 (new)**,
+and "The scale" (the QR marker). `git pull` first. Nothing in messages 1–4
+changed; messages 2 and 4 only got extra cm fields the phone may ignore.
+
+**Since 2026-11-18 the scale comes from the printed QR marker Tracker_10**
+lying flat in every photo (layer and candidate). Grasshopper finds it in the
+photo; the phone sends nothing new for it and needs no QRLocalizer for this.
+
+After the zone is shown (step 7):
+1. A button **"Photograph a stone"** (step 8). Tap → the same photo as
+   message 1 (AR camera image, JPEG 1280 px, QoS 1, vibrate on PUBACK),
+   but published as **message 5** on `alpinear/proto1/candidate`:
+   `{"photo": ..., "layer_ts": <ts of the layer photo answered Yes>, "ts": <now>}`
+   (no `ref_cm`).
+2. Wait for **message 6** on `alpinear/proto1/fit` whose `photo_ts` is this
+   photo's `ts` (tolerance 0.001), from the tap on, 15 s like the zone.
+3. Show the result (step 10) with a **sound**:
+   - `fits` → e.g. "Fits: 4.3 cm (needs 2.8–5.0)", a happy sound;
+   - `too_short` / `too_long` → "Too short / too long: 6.0 cm (needs
+     2.8–5.0), try another stone", a different sound;
+   - `unknown` → show `note` (e.g. no QR marker in the photo), no sound or
+     the "no" sound.
+   The candidate's `outline` may be drawn over the live view like the
+   outlines of message 2 (optional).
+4. The button stays: the person can photograph the next stone (message 5
+   again, same `layer_ts`). Keep the zone on screen meanwhile.
+5. Step 11 is **not** part of this round (a "New stone?" button that goes
+   back to step 1 can wait; the existing "New photo" test button is enough).
+
+Test without the Mac: `python fake_gh.py --stones 2 --save` answers
+messages 5 with message 6 too (prints `candidate -> fits, 4.3 cm long
+(zone 2.8-5.0)`, `--save` writes `fit_<time>.jpg`). Put the QR marker in
+every photo, layer and candidate. Done when: layer photo → Yes → zone →
+"Photograph a stone" → the result + sound, for one fitting and one
+non-fitting stone.
 
 ## Round 2: A, then B (done 2026-11-16)
 

@@ -228,6 +228,24 @@ to the stone, Grasshopper measures its length in cm against `length_cm`.
 Later on the phone: QRLocalizer with tracker 10 to put outlines and zone
 on the ground in AR, using the cm fields.
 
+## Update 2026-11-18: Grasshopper side of steps 8–10 done
+
+Messages 5 (candidate photo, phone → GH) and 6 (fit check, GH → phone) are
+defined in `MESSAGES.md`. `reply to phone` now also listens on
+`alpinear/proto1/candidate`: it saves the photo as `demo/inbox/cand_*.jpg`,
+runs `python/replies.py` on it with that layer's zone (one stone, the one
+nearest the middle; its long side in cm against the zone's `length_cm`)
+and sends `fits` / `too_short` / `too_long` / `unknown` with the lengths.
+New input `qr_id` on `reply to phone` (the same Panel as `detect`).
+`fake_gh.py` answers candidates too; `fake_phone.py --candidate` tests it.
+Tested on the Mac with the real Grasshopper: two candidates cut out of a
+phone photo, 6.0 cm → `too_long`, 4.3 cm → `fits` (zone 2.8–5.0 cm),
+reply 0.3–0.4 s after the photo. The phone side is round 4 in
+`UNITY_TASK.md`.
+
+Not checked: depth / width and height of the candidate (only the length);
+a real candidate photo from the phone.
+
 ## How to work
 
 Same rules as before: small steps, `MESSAGES.md` is the contract (change it

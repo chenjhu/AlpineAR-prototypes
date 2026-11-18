@@ -160,9 +160,67 @@ detection and sends it right after the Yes (`grasshopper/reply_to_phone.py`,
 made by `python/replies.py`); the same numbers as `fake_gh.py`. Unity draws
 it (`unity/OutlineReview.cs`).
 
-## Planned (not built)
+## 5. Candidate stone: phone → Grasshopper
 
-| # | topic | direction | content |
-|---|---|---|---|
-| 5 | `alpinear/proto1/candidate` | phone → GH | photo of a candidate stone, same fields as message 1 |
-| 6 | `alpinear/proto1/fit` | GH → phone | `{"result": "fits" \| "too_small" \| "too_big"}` |
+Topic: `alpinear/proto1/candidate`
+When: at the stone stock, the person holds the phone over one candidate
+stone and taps (flow step 8). Added 2026-11-18.
+
+```json
+{"photo": "<JPEG, base64>", "layer_ts": 1763297262.123, "ts": 1763297400.0}
+```
+
+| field | type | what |
+|---|---|---|
+| `photo` | string | top view of **one** candidate stone with the QR marker (Tracker_10) lying flat next to it, JPEG base64, as in message 1 |
+| `layer_ts` | number | the `photo_ts` of the layer whose zone (message 4) the stone is for: the phone's last layer photo answered Yes |
+| `ts` | number | time of this photo |
+
+The photo: the candidate in the **middle** of the picture (if more stones
+are in it, Grasshopper takes the one nearest the middle), the marker next
+to it but not touching it, nothing cut by the picture's edge counts. No
+`ref_cm`: without the marker there is no fit check.
+
+## 6. Fit check: Grasshopper → phone
+
+Topic: `alpinear/proto1/fit`
+When: right after message 5 (flow steps 9-10). Added 2026-11-18.
+
+```json
+{
+  "photo_ts": 1763297400.0,
+  "layer_ts": 1763297262.123,
+  "result": "fits",
+  "length_cm": 4.3,
+  "width_cm": 3.3,
+  "need_cm": [2.8, 5.0],
+  "image_size": [1280, 720],
+  "outline": [[612, 300], [700, 296], [705, 420]],
+  "note": "",
+  "ts": 1763297401.1
+}
+```
+
+| field | type | what |
+|---|---|---|
+| `photo_ts` | number | the `ts` of the candidate photo (message 5), unchanged |
+| `layer_ts` | number | copied from message 5 |
+| `result` | string | `fits`: long enough to cover the joint and short enough to stay in the zone. `too_short`, `too_long`: try another stone. `unknown`: no check possible, `note` says why (no marker in the photo, no stone found, no zone for `layer_ts`) |
+| `length_cm` | number or null | the candidate's length in cm (long side of its outline seen from above) |
+| `width_cm` | number or null | its width in cm (short side), for information |
+| `need_cm` | [number, number] or null | the zone's `length_cm` from message 4: [shortest, longest] |
+| `image_size` | [int, int] | width, height of the candidate photo |
+| `outline` | list of [int, int] | the candidate's outline in that photo's pixels (as in message 2), empty if none |
+| `note` | string | empty, or why `result` is `unknown`, or e.g. `3 stones in the photo, took the one in the middle` |
+| `ts` | number | time sent |
+
+The check is only the **length along the wall**: the stone's long side
+must lie between the zone's two lengths (it is laid with its long side
+along the wall). Depth and height are not checked yet. Lengths from a
+photo come out a little long for tall stones (`README.md`), so a
+candidate just over the longest length may still fit.
+
+The phone shows the result with a sound: one for `fits`, another for
+`too_short` / `too_long` (flow step 10). Then the person tries the next
+stone (message 5 again) or, after placing a fitting one, starts the next
+layer photo (flow step 11, "New stone?" = message 1 again).

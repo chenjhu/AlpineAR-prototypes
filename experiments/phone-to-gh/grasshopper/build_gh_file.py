@@ -89,7 +89,7 @@ try:
     doc.FilePath = GH_PATH
 
     note = GH_Scribble()
-    note.Text = ("Phone <-> Grasshopper (MESSAGES.md, messages 1-4)\n"
+    note.Text = ("Phone <-> Grasshopper (MESSAGES.md, messages 1-6)\n"
                  "Test without a phone: python/fake_phone.py photo.jpg --ref-cm 45 --answer yes")
     place(doc, note, 40, 10)
 
@@ -114,7 +114,7 @@ try:
     con_info = panel(doc, 950, 230, "info", size=(380, 70))
 
     rep = script(doc, os.path.join(HERE, "reply_to_phone.py"), "reply to phone",
-                 ["broker", "json_path", "listen"], ["info"], 860, 340)
+                 ["broker", "json_path", "listen", "qr_id"], ["info"], 860, 340)
     rep_info = panel(doc, 950, 450, "info", size=(420, 110))
 
     for src, dst in ((broker, rec.Params.Input[0]), (topic, rec.Params.Input[1]), (listen, rec.Params.Input[2]),
@@ -126,7 +126,8 @@ try:
                      (by_name(det.Params.Output, "json_path"), con.Params.Input[0]),
                      (broker, rep.Params.Input[0]),
                      (by_name(det.Params.Output, "json_path"), rep.Params.Input[1]),
-                     (listen, rep.Params.Input[2])):
+                     (listen, rep.Params.Input[2]),
+                     (qr_id, rep.Params.Input[3])):
         dst.AddSource(src)
     rec_info.AddSource(by_name(rec.Params.Output, "info"))
     det_info.AddSource(by_name(det.Params.Output, "info"))
