@@ -156,9 +156,13 @@ def _merge_weak_splits(markers: np.ndarray, gray: np.ndarray,
         score, a, b = min(pairs)
         if len(labels) <= target and score >= min_score:
             return
-        line = (cv2.dilate(np.uint8(markers == a), None, iterations=2) > 0) & (markers == -1)
+        # Remove only the line between a and b. (Clearing every line around a
+        # also erased a's border with a third segment, which then no longer
+        # touched anything and could never be merged.)
+        grow = lambda l: cv2.dilate(np.uint8(markers == l), None, iterations=2) > 0
+        line = grow(a) & grow(b) & (markers == -1)
         markers[markers == b] = a
-        markers[line & (cv2.dilate(np.uint8(markers == a), None, iterations=1) > 0)] = a
+        markers[line] = a
 
 
 def _to_stone(contour: np.ndarray, scale: float) -> Stone:

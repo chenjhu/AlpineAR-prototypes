@@ -1,0 +1,6 @@
+old MQTT connections closed
+reloaded receive photo
+reloaded detect
+reloaded receive contours
+reloaded reply to phone
+saved: True

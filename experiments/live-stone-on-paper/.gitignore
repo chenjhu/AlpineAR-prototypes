@@ -1,0 +1,5 @@
+# snapshots (S key) and recordings
+output/
+*.mp4
+__pycache__/
+.pytest_cache/
