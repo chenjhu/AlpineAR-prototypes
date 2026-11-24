@@ -37,7 +37,7 @@ import numpy as np
 
 import overlay
 from demo_image import close_window, read
-from rule_of_thirds import PlacementCheck, ThirdsResult, check_placement, compute_thirds
+from rule_of_thirds import PlacementCheck, ZoneResult, check_placement, compute_zone
 from stone_detect import DetectParams, Stone, detect_stones, find_homography, stone_from_points
 
 LAYER_COLORS = [(80, 200, 255), (255, 170, 60), (140, 230, 120), (200, 120, 255)]
@@ -99,7 +99,7 @@ def layer_pairs(stones: dict[str, Stone], locked: dict[str, Locked], u) -> list[
     return pairs
 
 
-def joint_point(r: ThirdsResult) -> np.ndarray:
+def joint_point(r: ZoneResult) -> np.ndarray:
     return r.to_image(r.joint, (r.depth.lo + r.depth.hi) / 2)
 
 
@@ -219,7 +219,7 @@ def run(args) -> None:
             below = [p for p in open_pairs if p[0] == layer - 1]
             if not below:
                 return stone, None, None, None
-            results = {p: compute_thirds(stones[p[1]], stones[p[2]]) for p in below}
+            results = {p: compute_zone(stones[p[1]], stones[p[2]]) for p in below}
             p = min(results, key=lambda q: np.linalg.norm(joint_point(results[q]) - stone.centroid))
             return stone, check_placement(results[p], stone), p, results[p]
 
@@ -236,7 +236,7 @@ def run(args) -> None:
                         raise RuntimeError(f"{path.name}: no saved outline for {name}; "
                                            "run without --no-gui and click it")
                     base = render(img, stones, locked,
-                                  [compute_thirds(stones[a], stones[b]) for _, a, b in open_pairs],
+                                  [compute_zone(stones[a], stones[b]) for _, a, b in open_pairs],
                                   [], f"step {i + 1}: outline new stone {name}")
                     s = min(1.0, VIEW_WIDTH / img.shape[1])
                     view = cv2.resize(base, None, fx=s, fy=s, interpolation=cv2.INTER_AREA)
@@ -271,7 +271,7 @@ def run(args) -> None:
         # 4. zones still to fill, for the next step
         u = wall_axis([stones[n] for n, rec in locked.items() if rec.layer == 0])
         filled = {rec.on for rec in locked.values()}
-        todo = [compute_thirds(stones[a], stones[b])
+        todo = [compute_zone(stones[a], stones[b])
                 for _, a, b in layer_pairs(stones, locked, u) if (a, b) not in filled]
         # A placed stone is shown with the zone it was checked against; a new
         # ground stone with the zones it opened. Both at once is unreadable.

@@ -23,6 +23,15 @@ import os
 import subprocess
 
 
+# The Mode 1 venv's Python: .venv/bin/python on macOS, .venv\Scripts\python.exe on Windows.
+VENV_PYTHON = ("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")
+# How to run it: on Windows without a console window flashing up at each run.
+RUN_OPTIONS = {"creationflags": 0x08000000} if os.name == "nt" else {}
+# Rhino sets PYTHONPATH / PYTHONHOME for its own Python 3.9; the venv's Python must not
+# inherit them, or it loads Rhino's standard library ("SRE module mismatch" on Windows).
+RUN_OPTIONS["env"] = {k: v for k, v in os.environ.items() if not k.upper().startswith("PYTHON")}
+
+
 def experiments_dir():
     """The .gh lives in experiments/phone-to-gh/demo/."""
     gh_file = ghenv.Component.OnPingDocument().FilePath  # noqa: F821
@@ -33,14 +42,14 @@ def experiments_dir():
 
 def detect(photo, ref, ts, count, qr):
     root = experiments_dir()
-    python = os.path.join(root, "mode1-rule-of-thirds", ".venv", "bin", "python")
+    python = os.path.join(root, "mode1-rule-of-thirds", ".venv", *VENV_PYTHON)
     script = os.path.join(root, "phone-to-gh", "python", "replies.py")
     for p in (python, script):
         if not os.path.exists(p):
             raise ValueError("missing %s" % p)
     out = os.path.splitext(photo)[0] + ".json"
     run = subprocess.run([python, script, photo, "--ref-cm", str(ref), "--ts", repr(float(ts)), "--stones", str(count), "--qr-id", str(qr)],
-                         capture_output=True, text=True, timeout=120)
+                         capture_output=True, text=True, timeout=120, **RUN_OPTIONS)
     if run.returncode != 0:
         raise ValueError("detection failed:\n" + (run.stderr or run.stdout)[-800:])
     return out, run.stdout.strip()

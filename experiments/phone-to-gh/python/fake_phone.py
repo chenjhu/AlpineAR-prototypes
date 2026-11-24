@@ -66,6 +66,8 @@ def main():
                     help="then wait for the outlines and answer like the phone")
     ap.add_argument("--candidate", type=Path,
                     help="with --answer yes: then send this candidate stone's photo and wait for the fit check")
+    ap.add_argument("--tap", help="with --candidate: x,y where the person taps the stone, in pixels "
+                    "of the candidate file (scaled like the photo that is sent)")
     ap.add_argument("--save", action="store_true",
                     help="with --answer: write reply_<time>.jpg with what came back")
     a = ap.parse_args()
@@ -107,9 +109,12 @@ def main():
             print("zone after %.1f s: %s" % (time.time() - answered_at, zone["note"] or "max %s, min %s" % (
                 zone["max"], zone["min"])))
         if ok and a.candidate:
-            cand, _ = photo_message(a.candidate, None)
+            cand, sent_size = photo_message(a.candidate, None)
             cand.pop("ref_cm")
             cand["layer_ts"] = msg["ts"]
+            if a.tap:
+                k = sent_size[0] / cv2.imread(str(a.candidate)).shape[1]
+                cand["tap"] = [round(float(v) * k, 1) for v in a.tap.split(",")]
             cand_at = time.time()
             client.publish(CANDIDATE, json.dumps(cand), qos=1).wait_for_publish(timeout=20)
             print("sent candidate %s" % a.candidate.name)

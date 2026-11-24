@@ -1,0 +1,38 @@
+{
+ "s1": {
+  "layer": "s1_layer.jpg",
+  "candidates": [
+   "s1_cand1.jpg",
+   "s1_cand2.jpg",
+   "s1_cand3.jpg",
+   "s1_cand4.jpg"
+  ]
+ },
+ "s2": {
+  "layer": "s2_layer.jpg",
+  "candidates": [
+   "s2_cand1.jpg",
+   "s2_cand2.jpg",
+   "s2_cand3.jpg",
+   "s2_cand4.jpg"
+  ]
+ },
+ "s3": {
+  "layer": "s3_layer.jpg",
+  "candidates": [
+   "s3_cand1.jpg",
+   "s3_cand2.jpg",
+   "s3_cand3.jpg",
+   "s3_cand4.jpg"
+  ]
+ },
+ "s4": {
+  "layer": "s4_layer.jpg",
+  "candidates": [
+   "s4_cand1.jpg",
+   "s4_cand2.jpg",
+   "s4_cand3.jpg",
+   "s4_cand4.jpg"
+  ]
+ }
+}

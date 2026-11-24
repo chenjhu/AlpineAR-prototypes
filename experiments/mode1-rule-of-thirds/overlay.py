@@ -1,14 +1,14 @@
 """Drawing helpers: the AR overlay and the step-by-step debug panels.
 
 Visual language follows the Mode 1 sketch: blue hatched = where the new stone
-must be, white = where it is allowed to be, dashed lines = thirds.
+must be, white = where it is allowed to be, dashed lines = quarters.
 """
 from __future__ import annotations
 
 import cv2
 import numpy as np
 
-from rule_of_thirds import PlacementCheck, ThirdsResult
+from rule_of_thirds import PlacementCheck, ZoneResult
 from stone_detect import Detection, Stone
 
 BLUE = (125, 110, 45)        # BGR, the hatch colour of the sketch
@@ -94,17 +94,19 @@ def draw_stones(img, stones: list[Stone], rotated=False) -> np.ndarray:
     return out
 
 
-def draw_thirds_lines(img, r: ThirdsResult) -> None:
-    """Dashed third lines across both base stones, seen from above."""
+def draw_rule_lines(img, r: ZoneResult) -> None:
+    """Dashed quarter lines (thirds with the old rule) across both base
+    stones, measured from the joint line as the zones are, seen from above."""
     pad = 0.15 * r.outer.width
     b0, b1 = r.outer.lo - pad, r.outer.hi + pad
-    for span in (r.left_span, r.right_span):
-        for a in (span.lo, span.lo + span.width / 3, span.lo + 2 * span.width / 3, span.hi):
+    steps = int(round(1 / r.fraction))
+    for i in range(1, steps + 1):
+        for a in (r.joint - i * r.x / steps, r.joint + i * r.y / steps):
             dashed_line(img, r.to_image(a, b0), r.to_image(a, b1), WHITE, 1)
     dashed_line(img, r.to_image(r.joint, b0), r.to_image(r.joint, b1), BLUE, 2, 4, 4)
 
 
-def draw_zone(img, r: ThirdsResult) -> None:
+def draw_zone(img, r: ZoneResult) -> None:
     """The box for the next stone: white = allowed, blue hatched = must cover."""
     allowed_q, must_q = r.box(r.allowed), r.box(r.must)
     blend_fill(img, allowed_q, WHITE, 0.4)
@@ -113,13 +115,13 @@ def draw_zone(img, r: ThirdsResult) -> None:
     cv2.polylines(img, [_ipts(must_q)], True, BLUE, _t(img, 2), cv2.LINE_AA)
 
 
-def draw_ar(img, r: ThirdsResult, check: PlacementCheck | None = None,
+def draw_ar(img, r: ZoneResult, check: PlacementCheck | None = None,
             px_per_unit: float = 1.0, unit: str = "px") -> np.ndarray:
     """Top-view overlay a craftsperson would see on the phone: the box for
     the next stone lies on top of both base stones, across the joint."""
     out = img.copy()
     allowed_q = r.box(r.allowed)
-    draw_thirds_lines(out, r)
+    draw_rule_lines(out, r)
     draw_zone(out, r)
     s = _k(out)
     for i, stone in enumerate((r.left, r.right)):
@@ -129,7 +131,7 @@ def draw_ar(img, r: ThirdsResult, check: PlacementCheck | None = None,
     k = 1.0 / px_per_unit
     top = allowed_q[np.argmin(allowed_q[:, 1])]
     label(out, f"next stone: length {r.must.width * k:.0f}-{r.allowed.width * k:.0f} {unit},"
-               f" depth ~{r.depth.width * k:.0f} {unit}", (top[0] - 170 * s, top[1] - 34 * s))
+               f" depth {r.stone_depth.lo * k:.0f}-{r.stone_depth.hi * k:.0f} {unit}", (top[0] - 170 * s, top[1] - 34 * s))
     label(out, "blue = must cover   white = allowed", (top[0] - 140 * s, top[1] - 10 * s),
           scale=0.45)
 

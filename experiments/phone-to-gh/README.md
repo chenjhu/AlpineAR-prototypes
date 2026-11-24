@@ -32,7 +32,7 @@ phone ──photo──> [receive photo] ─> [detect] ─> [receive contours] �
 | 6 | Unity sends the photo | `unity/PhotoSender.cs` in the course Unity project: AR camera image (no UI), JPEG 1280 px, plain JSON, vibrates on the broker's receipt | done, **tested end to end** (see below) |
 | 7 | Outlines, Yes / No, zone (flow 4–7) | `grasshopper/reply_to_phone.py` sends messages 2 and 4, receives 3; `unity/OutlineReview.cs` draws them over the live camera view | done, **tested end to end** 2026-11-16 (`MAC_TASK.md`) |
 | 8 | Scale from the QR marker Tracker_10 | `python/qr_marker.py`: the printed marker in the photo → homography photo px → cm in its frame (x red, y green); its paper is covered before detection; messages 2 and 4 get cm fields (`MESSAGES.md`, "The scale") | done on the Mac, tested on a composite photo; **not yet on a real phone photo** |
-| 9 | Candidate stone, fit check (flow 8–10) | messages 5–6: `reply to phone` saves the candidate photo, runs `python/replies.py --layer-ts ... --zone ...` (one stone, length in cm vs the zone's `length_cm`) and sends `fits` / `too_short` / `too_long`; `fake_gh.py`, `fake_phone.py --candidate` do the same | Grasshopper done 2026-11-18, tested with `fake_phone.py` (two stones cut from a phone photo: `too_long` 6.0 cm, `fits` 4.3 cm, zone 2.8–5.0, reply in 0.4 s); Unity: `UNITY_TASK.md` round 4 |
+| 9 | Candidate stone, fit check (flow 8–10). Since 2026-11-23 the quarter rule, length **and** depth, and the person taps the stone (`tap` in message 5) | messages 5–6: `reply to phone` saves the candidate photo, runs `python/replies.py --layer-ts ... --zone ...` (one stone, length in cm vs the zone's `length_cm`) and sends `fits` / `too_short` / `too_long`; `fake_gh.py`, `fake_phone.py --candidate` do the same | Grasshopper done 2026-11-18, tested with `fake_phone.py` (two stones cut from a phone photo: `too_long` 6.0 cm, `fits` 4.3 cm, zone 2.8–5.0, reply in 0.4 s); Unity: `UNITY_TASK.md` round 4 |
 
 **End-to-end test, 2026-11-16:** a tap in the app GeoViewerAR1 (Pixel 8)
 → MQTT → Grasshopper on the Mac → 2 closed curves, one per object, areas
@@ -68,6 +68,15 @@ Each photo takes a few seconds from sending to curves.
    photo: it updates by itself.
 
 Needs the Mode 1 venv (`../mode1-rule-of-thirds/.venv`) for the detection.
+
+**On Windows (Rhino 8), since 2026-11-23** the same `.gh` runs too, no Mac
+needed: `py -3.11 -m venv .venv` and `.venv\Scripts\pip install -r
+requirements.txt` in `../mode1-rule-of-thirds/`, then in Rhino run
+`grasshopper/build_gh_file.py` (`_-RunPythonScript`, or `RhinoCode.exe
+script ...`) and open `demo/phone_to_gh.gh`. The scripts pick the venv's
+`Scripts\python.exe` on Windows and start it without Rhino's `PYTHONPATH` /
+`PYTHONHOME` (else: "SRE module mismatch"). Tested with `fake_phone.py`:
+outlines in 0.8 s, zone, tapped candidate -> `fits` in 0.6 s.
 Photos and their JSON land in `demo/inbox/` (not in git).
 
 After editing a script in `grasshopper/`, rebuild the .gh with
@@ -166,3 +175,11 @@ After editing a script in `grasshopper/`, rebuild the .gh with
   off and on.
 - Editing a script while the .gh is open: run `grasshopper/reload_scripts.py`
   instead of rebuilding and re-opening the file.
+
+## Real-scale test (2026-11-24)
+
+`realscale_test/`: the whole system (Grasshopper over MQTT) run blind on photos of real-size
+wall stones (30–65 cm), with the true sizes sealed away until after the run. On a white
+ground, with stones it had not seen, the wall outlines overlap the true stones by 97–99 %, the
+zone is within ~1 cm, and 11 of 16 candidate stones get the right answer. What changed
+because of it, and what still fails: `realscale_test/README.md`.

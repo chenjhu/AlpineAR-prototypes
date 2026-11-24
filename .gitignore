@@ -227,3 +227,16 @@ __marimo__/
 
 # Photos received over MQTT (phone-to-gh)
 experiments/phone-to-gh/demo/inbox/
+
+# Real-scale test (experiments/phone-to-gh/realscale_test): keep the scripts, the reports, the
+# round-3 baseline (inputs, sealed truth, results) and its stone sources; the rest is regenerated.
+experiments/phone-to-gh/realscale_test/world/cutouts*/
+experiments/phone-to-gh/realscale_test/world/sources/*
+!experiments/phone-to-gh/realscale_test/world/sources/stones3/
+experiments/phone-to-gh/realscale_test/round1/inputs/
+experiments/phone-to-gh/realscale_test/round1/sealed_truth/
+experiments/phone-to-gh/realscale_test/round2/inputs/
+experiments/phone-to-gh/realscale_test/round2/sealed_truth/
+experiments/phone-to-gh/realscale_test/round*/outputs/screens_s*.png
+experiments/phone-to-gh/realscale_test/round1/outputs/truth_*.png
+experiments/phone-to-gh/realscale_test/round2/outputs/truth_*.png

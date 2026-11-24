@@ -3,7 +3,7 @@
 Listens for photos (MESSAGES.md message 1), detects the stones with the
 same Mode 1 detection Grasshopper uses, and replies with their outlines
 (message 2). Prints every answer the phone sends (message 3); after a Yes
-it sends the rule-of-thirds zone for that photo (message 4). A candidate
+it sends the zone (quarter rule) for that photo (message 4). A candidate
 stone's photo (message 5) gets the fit check (message 6). So the Unity
 side can test steps 4-10 without the Mac:
 
@@ -12,20 +12,24 @@ side can test steps 4-10 without the Mac:
 
 --save also writes check_<time>.jpg: the photo with the outlines drawn
 from message 2 itself, to compare with what the phone shows, and
-zone_<time>.jpg with the zone of message 4 (white = max, blue = min).
+zone_<time>.jpg with the zone of message 4 (white = max, blue = min),
+and layer_<time>.jpg / candidate_<time>.jpg: each photo exactly as the
+phone sent it, to run a failure again.
 Do not run it while the real Grasshopper sends outlines too (two replies).
 """
 import argparse
 import base64
 import json
 import time
+import traceback
+from pathlib import Path
 
 import cv2
 import numpy as np
 import paho.mqtt.client as mqtt
 
 # the same code Grasshopper runs (grasshopper/detect_photo.py -> replies.py)
-from replies import detect, draw, fit_message, outlines_message, zone_message
+from replies import candidate_stones, detect, draw, fit_message, outlines_message, zone_message
 
 BROKER = "broker.hivemq.com"
 PHOTO = "alpinear/proto1/photo"
@@ -58,6 +62,7 @@ def main():
                 send_fit(client, data, stamp)
                 return
             jpg = np.frombuffer(base64.b64decode(data["photo"]), np.uint8)
+            keep(jpg, "layer")
             img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
             found, marker = detect(img, a.stones, a.qr_id)
             msg = outlines_message(found, img.shape[1::-1], data["ts"], marker)
@@ -73,6 +78,7 @@ def main():
                 print("         drawn -> %s" % name)
         except Exception as e:  # keep listening
             print("%s message on %s ignored: %s: %s" % (stamp, m.topic, type(e).__name__, e))
+            traceback.print_exc()
 
     def send_zone(client, photo_ts, stamp):
         key = next((t for t in photos if abs(t - photo_ts) < 0.001), None)
@@ -90,16 +96,22 @@ def main():
             cv2.imwrite(name, draw(img, msg))
             print("         drawn -> %s" % name)
 
+    def keep(jpg, kind):
+        """With --save: the photo exactly as the phone sent it, to run a failure again."""
+        if a.save:
+            Path("%s_%s.jpg" % (kind, time.strftime("%Y%m%d_%H%M%S"))).write_bytes(jpg.tobytes())
+
     def send_fit(client, data, stamp):
         jpg = np.frombuffer(base64.b64decode(data["photo"]), np.uint8)
+        keep(jpg, "candidate")
         img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
-        found, marker = detect(img, 1, a.qr_id)
+        found, marker, note = candidate_stones(img, a.qr_id, data.get("tap"))
         key = next((t for t in photos if abs(t - data["layer_ts"]) < 0.001), None)
         zone = None
         if key is not None:
             layer_img, layer_found, layer_marker = photos[key]
             zone = zone_message(layer_found, layer_img.shape[1::-1], key, layer_marker)
-        msg = fit_message(found, marker, img.shape[1::-1], data["ts"], data["layer_ts"], zone)
+        msg = fit_message(found, marker, img.shape[1::-1], data["ts"], data["layer_ts"], zone, note)
         client.publish(FIT, json.dumps(msg), qos=1)
         print("%s candidate -> %s%s%s" % (stamp, msg["result"],
               ", %.1f cm long (zone %.1f-%.1f)" % ((msg["length_cm"],) + tuple(msg["need_cm"]))

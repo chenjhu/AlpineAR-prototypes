@@ -28,11 +28,13 @@ namespace Compas.GeoViewerXR
     /// </summary>
     public class PhotoSender : MonoBehaviour
     {
-        // MESSAGES.md, messages 1-3. Do not change here without changing MESSAGES.md first.
+        // MESSAGES.md, messages 1-6. Do not change here without changing MESSAGES.md first.
         public const string PhotoTopic = "alpinear/proto1/photo";
         public const string OutlinesTopic = "alpinear/proto1/outlines";
         public const string AnswerTopic = "alpinear/proto1/answer";
         public const string ZoneTopic = "alpinear/proto1/zone";
+        public const string CandidateTopic = "alpinear/proto1/candidate";
+        public const string FitTopic = "alpinear/proto1/fit";
 
         public string brokerAddress = "broker.hivemq.com";
         public int brokerPort = 1883;
@@ -70,6 +72,9 @@ namespace Compas.GeoViewerXR
         /// <summary>Main thread: the raw JSON of a message on <see cref="ZoneTopic"/>.</summary>
         public event Action<string> ZoneReceived;
 
+        /// <summary>Main thread: the raw JSON of a message on <see cref="FitTopic"/>.</summary>
+        public event Action<string> FitReceived;
+
         private const ushort KeepAliveSeconds = 20;
         private const float ConnectTimeout = 10f;
 
@@ -85,8 +90,6 @@ namespace Compas.GeoViewerXR
         private bool _configChosen;
         private string _status = "";
         private string _heightText = "";
-        private GUIStyle _buttonStyle;
-        private GUIStyle _labelStyle;
 
         /// <summary>The line above the button.</summary>
         public void ShowStatus(string text) => _status = text ?? "";
@@ -128,7 +131,8 @@ namespace Compas.GeoViewerXR
             while (_incoming.TryDequeue(out (string topic, string json) m))
             {
                 if (m.topic == OutlinesTopic) OutlinesReceived?.Invoke(m.json);
-                else ZoneReceived?.Invoke(m.json);
+                else if (m.topic == ZoneTopic) ZoneReceived?.Invoke(m.json);
+                else FitReceived?.Invoke(m.json);
             }
 
             // Live reading while aiming, to check it against a tape measure.
@@ -244,6 +248,48 @@ namespace Compas.GeoViewerXR
         }
 
         /// <summary>
+        /// Flow step 8 ("Check size"): takes a photo of a candidate stone and sends it as
+        /// MESSAGES.md message 5, for the zone of the layer photo <paramref name="layerTs"/>.
+        /// <paramref name="tapInPhoto"/> turns the photo's size (width, height) into the point the
+        /// person tapped on the stone, in that photo's pixels (top-left origin, y down), sent as
+        /// <c>tap</c>; null = no tap. <paramref name="captured"/> gets the photo's ts, size and tap
+        /// before it is sent (so the caller can wait for the fit from then on);
+        /// <paramref name="done"/> gets whether it arrived. No vibration here: in the flow it
+        /// only means success, so it comes with a stone that fits.
+        /// </summary>
+        public IEnumerator SendCandidate(double layerTs, Func<int, int, Vector2?> tapInPhoto,
+                                         Action<double, Vector2Int, Vector2?> captured, Action<bool> done)
+        {
+            Texture2D photo = CapturePhoto();
+            if (photo == null)
+            {
+                done(false);
+                yield break;
+            }
+
+            var size = new Vector2Int(photo.width, photo.height);
+            Vector2? tap = tapInPhoto?.Invoke(size.x, size.y);
+            byte[] jpg = photo.EncodeToJPG(jpegQuality);
+            Destroy(photo);
+            double ts = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 1000.0;
+            var fields = new Dictionary<string, object>
+            {
+                { "photo", Convert.ToBase64String(jpg) },
+                { "layer_ts", layerTs },
+                { "ts", ts },
+            };
+            if (tap.HasValue)
+            {
+                fields["tap"] = new[] { Math.Round(tap.Value.x, 1), Math.Round(tap.Value.y, 1) };
+            }
+
+            captured(ts, size, tap);
+            bool arrived = false;
+            yield return PublishJson(CandidateTopic, JsonConvert.SerializeObject(fields), ok => arrived = ok);
+            done(arrived);
+        }
+
+        /// <summary>
         /// Publishes plain JSON with QoS 1 and waits for the broker's receipt (PUBACK).
         /// <paramref name="done"/> gets true only if the receipt came within <see cref="ackTimeout"/>.
         /// </summary>
@@ -307,7 +353,7 @@ namespace Compas.GeoViewerXR
             if (task.Status == TaskStatus.RanToCompletion)
             {
                 _client = task.Result;
-                Debug.Log($"PhotoSender: connected to {brokerAddress}, listening on {OutlinesTopic} and {ZoneTopic}");
+                Debug.Log($"PhotoSender: connected to {brokerAddress}, listening on {OutlinesTopic}, {ZoneTopic}, {FitTopic}");
             }
             else
             {
@@ -330,8 +376,8 @@ namespace Compas.GeoViewerXR
             client.MqttMsgPublishReceived += OnMessage;
             byte result = client.Connect(Guid.NewGuid().ToString(), null, null, true, KeepAliveSeconds);
             if (result != MqttMsgConnack.CONN_ACCEPTED) throw new Exception($"broker refused (code {result})");
-            client.Subscribe(new[] { OutlinesTopic, ZoneTopic },
-                new[] { MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE, MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE });
+            byte qos1 = MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE;
+            client.Subscribe(new[] { OutlinesTopic, ZoneTopic, FitTopic }, new[] { qos1, qos1, qos1 });
             return client;
         }
 
@@ -356,7 +402,7 @@ namespace Compas.GeoViewerXR
 
         private void OnMessage(object sender, MqttMsgPublishEventArgs e)
         {
-            if (e.Topic == OutlinesTopic || e.Topic == ZoneTopic)
+            if (e.Topic == OutlinesTopic || e.Topic == ZoneTopic || e.Topic == FitTopic)
             {
                 _incoming.Enqueue((e.Topic, Encoding.UTF8.GetString(e.Message)));
             }
@@ -426,31 +472,22 @@ namespace Compas.GeoViewerXR
         {
             if (!showButton) return;
 
-            float w = Screen.width * 0.7f;
-            float h = Screen.height * 0.08f;
+            // Look: AlpineUI.cs. Status and height on small pills above one blue pill button.
+            float h = AlpineUI.ButtonHeight;
+            float w = Screen.width * 0.78f;
             var buttonRect = new Rect((Screen.width - w) / 2f, Screen.height * 0.72f, w, h);
-            var labelRect = new Rect(buttonRect.x, buttonRect.y - h * 0.6f, w, h * 0.6f);
+            float chipH = h * 0.6f, gap = h * 0.2f;
+            var labelRect = new Rect(Screen.width * 0.05f, buttonRect.y - gap - chipH, Screen.width * 0.9f, chipH);
 
-            if (_buttonStyle == null)
-            {
-                _buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = Mathf.RoundToInt(h * 0.3f) };
-                _labelStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = Mathf.RoundToInt(h * 0.25f),
-                    alignment = TextAnchor.MiddleCenter,
-                };
-            }
-
-            GUI.Label(labelRect, _status, _labelStyle);
-            var heightRect = new Rect(labelRect.x - w * 0.1f, labelRect.y - labelRect.height, w * 1.2f, labelRect.height);
-            GUI.Label(heightRect, _heightText, _labelStyle);
-
-            GUI.enabled = !_busy;
-            if (GUI.Button(buttonRect, _busy ? "Sending..." : "Tap when in position", _buttonStyle))
+            // A long line wraps and its pill grows upwards: the height pill goes above
+            // wherever the status pill ended up.
+            Rect status = AlpineUI.Chip(labelRect, _status);
+            float heightBottom = status.height > 0 ? status.y - gap * 0.6f : labelRect.yMax;
+            AlpineUI.Chip(new Rect(labelRect.x, heightBottom - chipH, labelRect.width, chipH), _heightText);
+            if (AlpineUI.Button(buttonRect, _busy ? "Sending…" : "Tap when in position", true, !_busy))
             {
                 TakeAndSend();
             }
-            GUI.enabled = true;
         }
     }
 }

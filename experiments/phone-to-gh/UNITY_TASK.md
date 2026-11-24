@@ -48,10 +48,51 @@ over MQTT. The chart: [`../rhino-contour-to-gh/presentation/flow_gh_unity_split.
 | 3 | | receive photo, detect stones → curves | **done**, tested end to end |
 | 4–5 | receive outlines, show them over the live camera view, ask Yes/No, send answer | send outlines, receive answer | **done**, tested end to end with Grasshopper (2026-11-16) |
 | 6–7 | show zone + sound | rule of thirds (Mode 1) → message 4 | **done**, tested end to end with Grasshopper (2026-11-16) |
-| 8–10 | tap-photo of candidate, show result + sound | fit check (messages 5–6) | Grasshopper **done** 2026-11-18 (tested with `fake_phone.py`); **Unity: round 4 below** |
+| 8–10 | tap the candidate stone on the camera view (= photo + `tap`), show result + sound | fit check (messages 5–6) | Grasshopper **done** 2026-11-18; Unity round 4 built 2026-11-18, **tap on the stone added 2026-11-23** (see round 5); not yet tested on the phone |
 | 11 | button | next round | later |
 
-## Round 4: flow steps 8–10, the candidate stone (to do)
+## Round 6: size panel and "Show placement" (2026-11-24, built, to test on the phone)
+
+After the first test on the Pixel 8 (video 2026-11-24: everything worked; the
+boxes were too thick for the small stones and the size was small text):
+- After Yes **no boxes**: the person needs the size, not the place. A
+  "NEXT STONE" panel at the top (left of the course scene's round buttons):
+  the stone seen from above (as long and deep as asked) with its two
+  dimension lines, and the numbers big ("1.7–5.0 cm"), the words small
+  ("LENGTH · along the wall", "DEPTH · into the wall"). After a check this
+  stone's numbers under them, green in range and red out of it.
+- **"Show placement"** (blue once a stone fits): the layer's red outlines and
+  the white / blue boxes of the first photo over the live view again,
+  nothing sent; the person holds the phone so the outlines sit on the
+  stones. "Back" returns, "Next stone" starts the next round.
+- Thinner lines: `outlineWidth` 3 and `boxWidth` 2 photo pixels (new field
+  names, so the scene's old `lineWidth: 5` does not carry over).
+- Compiled with Unity's own Roslyn (the editor was open): 0 errors.
+  Preview on frames of the video: `presentation/ui_preview_20261124.png`.
+
+## Round 5: tap on the stone (2026-11-23, built, to test on the phone)
+
+The "Photograph a stone" button is gone: once the zone is shown, the card
+says "Find a stone within these dimensions: length a–b cm, depth c–d cm.
+Then tap it on the screen to check its size". A tap on the camera view
+(above the card) takes the candidate photo and sends where the tap was, in
+that photo's pixels, as `tap` in message 5 (`OutlineReview.ScreenToPhoto`:
+the exact inverse of how the outlines are placed over the live view;
+checked in Python for all four orientations). A magenta cross marks the tap
+while Grasshopper checks. Result (message 6, the group's flow 1.5): `fits`
+→ green outline, jingle, vibration, "The size fits: x cm along the wall,
+y cm deep"; `too_short` / `too_long` / `too_shallow` / `too_deep` → red
+outline, "Wrong size (...). Try another stone or shape it.", no sound, no
+vibration. The candidate photo no longer vibrates when sent (vibration =
+success only).
+
+Test (no Mac): `python fake_gh.py --stones 2 --save` in `python/`; layer
+photo → Yes → zone → tap a stone next to the QR marker → `fake_gh.py`
+prints `candidate -> ...`; `fit_<time>.jpg` shows which stone it measured.
+Done when the measured stone is the tapped one, for one fitting and one
+non-fitting stone.
+
+## Round 4: flow steps 8–10, the candidate stone (built 2026-11-18)
 
 Message formats: [`MESSAGES.md`](MESSAGES.md), **messages 5 and 6 (new)**,
 and "The scale" (the QR marker). `git pull` first. Nothing in messages 1–4

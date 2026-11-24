@@ -2,6 +2,9 @@
 
 > "Place a joint on a rock and a rock on a joint" (p.22) - 1/3 on the joint,
 > 1/3 on the left rock, 1/3 on the right rock.
+>
+> Since 2026-11-23 the group's refined version: the new stone covers 1/4 to
+> 3/4 of each supporting stone (see "How the virtual box is computed").
 
 A 2D computer-vision prototype for the midterm. The phone looks **straight
 down** on the wall (top view). The prototype detects the two base stones,
@@ -127,17 +130,22 @@ perpendicular to the joint where the two outlines meet (falls back to the
 centre-to-centre line if the stones are far apart). `n` runs across it
 (depth). The wall can run in any direction in the photo.
 
-For stone 1 `[L0, L1]` (length `wL`) and stone 2 `[R0, R1]` (length `wR`):
+Since 2026-11-23 the **quarter rule** (the group's diagrams), not thirds;
+`compute_zone(..., fraction=1/3)` gives the old rule. The joint is one line
+J in the middle of the gap the outlines leave (a gap is hard to see in a
+photo, so it is not used on its own); stone 1 is `x` long from its outer end
+to J, stone 2 `y` long from J to its outer end:
 
 ```
-must zone    (blue hatched) = [L1 - wL/3 , R0 + wR/3]   new stone must cover this
-allowed zone (white)        = [L0 + wL/3 , R1 - wR/3]   and must stay inside this
-next stone length           = |must| ... |allowed|
-next stone depth            = depth both stones share near the joint
+must zone    (blue hatched, E_min) = [J - x/4 , J + y/4]     new stone must cover this
+allowed zone (white, E_max)        = [J - 3x/4, J + 3y/4]    and must stay inside this
+next stone length z                = x/4 + y/4 ... 3x/4 + 3y/4
+green box for a stone of length z  = [max(J - 3x/4, J + y/4 - z), min(J + 3y/4, J - x/4 + z)]
+next stone depth                   = average depth of the two stones +- 10 %
 ```
 
 The "allowed" limit keeps the outer thirds free for the neighbouring stones of
-the same course. A placed stone is OK when it covers 1/3 to 2/3 of each base
+the same course. A placed stone is OK when it covers 1/4 to 3/4 of each base
 stone. From above it hides the joint, so it is found as the change between a
 before and an after photo (brightness-only changes, i.e. its shadow, count
 less).

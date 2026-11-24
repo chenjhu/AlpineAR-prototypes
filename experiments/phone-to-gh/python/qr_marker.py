@@ -1,9 +1,16 @@
 """The printed COMPAS XR marker (QR "Tracker_10") as a ruler on the ground.
 
-A QR code of known size lying flat in the photo gives the scale and the
-photo's tilt at once: four of its points with known cm positions are
-enough for a homography photo pixels -> cm on the ground. No camera height
-needed. See MESSAGES.md, "The scale".
+A QR code of known size lying flat in the photo gives the scale: four of
+its points with known cm positions give an affine map photo pixels -> cm
+on the ground (least squares over the four). No camera height needed. See
+MESSAGES.md, "The scale".
+
+Affine, not a full homography (real-scale test, 2026-11-24): the marker is
+12 cm, the stones 30-60 cm away from it. A homography fitted to the four
+corners extrapolates their pixel errors (1-2 px) into the stones: median
+7.7 %, up to 40 % wrong sizes. The affine map: median 1.9 %, at most 6.6 %,
+with the camera tipped up to 6 degrees. What it leaves out is the change of
+scale across a tilted photo, a few % for a phone held roughly level.
 
 Print layout of Tracker_10, measured with a ruler: the black QR square is
 12.0 cm, the red line 14.8 cm. Where the lines start was measured on a
@@ -38,7 +45,7 @@ FRAME_CORNERS_CM = np.float32([[0, 0], [FRAME_CM, 0], [FRAME_CM, FRAME_CM], [0, 
 class Marker:
     qr_id: int
     corners_px: np.ndarray       # (4, 2) QR corners: top-left, top-right, bottom-right, bottom-left
-    to_cm_h: np.ndarray          # 3x3 homography photo px -> cm in the frame
+    to_cm_h: np.ndarray          # 3x3 (affine) photo px -> cm in the frame
 
     def to_cm(self, pts):
         pts = np.asarray(pts, np.float64).reshape(-1, 1, 2)
@@ -54,7 +61,7 @@ class Marker:
 
     def px_per_cm(self):
         """Photo pixels per cm at the marker (for messages only: the scale
-        changes across a tilted photo, the homography does not)."""
+        changes across a tilted photo)."""
         f = self.frame_px()
         return float(np.mean(np.linalg.norm(f - np.roll(f, 1, axis=0), axis=1))) / FRAME_CM
 
@@ -102,15 +109,41 @@ def _bottom_right(gray, c):
     return quad[np.argmin(np.linalg.norm(quad - c[2], axis=1))].astype(np.float32)
 
 
+# OpenCV's QR detector misses a sharp, fully visible marker in some photos and
+# finds it in the same photo a little smaller or bigger (phone photos, 2026-11-18:
+# 4 of 9 candidate photos "no QR marker"). So: try a few sizes.
+TRY_SCALES = (1.0, 0.75, 1.5, 0.5, 1.25)
+
+
+def _find_qr(img, qr_id):
+    """QR corners (4, 2) in `img`'s pixels, or None."""
+    detector = cv2.QRCodeDetector()
+    h, w = img.shape[:2]
+    for s in TRY_SCALES:
+        scaled = img if s == 1.0 else cv2.resize(
+            img, (round(w * s), round(h * s)), interpolation=cv2.INTER_AREA if s < 1 else cv2.INTER_LINEAR)
+        text, pts, _ = detector.detectAndDecode(scaled)
+        found = re.search(r"(\d+)\s*$", text or "")
+        if pts is not None and found and int(found.group(1)) == int(qr_id):
+            return pts.reshape(4, 2).astype(np.float32) / s
+    return None
+
+
 def find_marker(img, qr_id=10):
     """The marker with this id in a BGR photo, or None. QR text is e.g. 'ID_10'."""
-    text, pts, _ = cv2.QRCodeDetector().detectAndDecode(img)
-    found = re.search(r"(\d+)\s*$", text or "")
-    if pts is None or not found or int(found.group(1)) != int(qr_id):
+    c = _find_qr(img, qr_id)
+    if c is None:
         return None
-    c = pts.reshape(4, 2).astype(np.float32)
     c[2] = _bottom_right(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), c)
-    return Marker(int(qr_id), c, cv2.getPerspectiveTransform(c, QR_CORNERS_CM))
+    return Marker(int(qr_id), c, affine_to_cm(c))
+
+
+def affine_to_cm(corners_px):
+    """3x3 matrix of the least-squares affine map: the QR's corners in the
+    photo -> QR_CORNERS_CM."""
+    src = np.hstack([np.float64(corners_px), np.ones((4, 1))])
+    m, *_ = np.linalg.lstsq(src, np.float64(QR_CORNERS_CM), rcond=None)   # (3, 2)
+    return np.vstack([m.T, [0.0, 0.0, 1.0]])
 
 
 def draw(img, marker):

@@ -1,4 +1,4 @@
-"""Run Mode 1 (rule of thirds) on top-view photos and save every step as images.
+"""Run Mode 1 (quarter rule, formerly rule of thirds) on top-view photos and save every step as images.
 
     python demo_image.py samples/scene_two_stones.png
     python demo_image.py photos/*.jpg --ref-cm 40        # stone 1 is 40 cm long
@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 
 import overlay
-from rule_of_thirds import check_marked_points, check_placement, compute_thirds, pick_base_pair
+from rule_of_thirds import check_marked_points, check_placement, compute_zone, pick_base_pair
 from stone_detect import DetectParams, align_to, detect_placed_stone, detect_stones
 
 CLICK_VIEW_WIDTH = 1200   # phone photos are too big for the screen
@@ -132,15 +132,15 @@ def run_one(path: Path, args) -> None:
 
     panels = overlay.detection_panels(image, det)
     left, right, _ = pick_base_pair(det.stones)
-    result = compute_thirds(left, right)
+    result = compute_zone(left, right)
 
     px_per_unit, unit = 1.0, "px"
     if args.ref_cm:
         px_per_unit, unit = result.left_span.width / args.ref_cm, "cm"
 
     thirds_view = overlay.draw_stones(image, [left, right])
-    overlay.draw_thirds_lines(thirds_view, result)
-    panels["7 thirds of each stone"] = thirds_view
+    overlay.draw_rule_lines(thirds_view, result)
+    panels["7 quarters of each stone"] = thirds_view
     panels["8 AR overlay"] = overlay.draw_ar(image, result, None, px_per_unit, unit)
 
     check = None
@@ -174,16 +174,16 @@ def run_one(path: Path, args) -> None:
     (args.out_dir / f"{stem}.json").write_text(json.dumps(data, indent=2))
 
     print(f"  next stone: length {data['stone_length_min']}-{data['stone_length_max']} {unit},"
-          f" depth ~{data['stone_depth']} {unit}")
+          f" depth {data['stone_depth_min']}-{data['stone_depth_max']} {unit}")
     if check is not None:
         print(f"  placed stone: {check.message} "
               f"(covers {check.cover_left:.0%} of stone 1, {check.cover_right:.0%} of stone 2)")
     print(f"  saved {args.out_dir}/{stem}_steps.png, _ar.png, .json")
 
     if args.show:
-        cv2.imshow("rule of thirds (any key to close)", final)
+        cv2.imshow("Mode 1 zone (any key to close)", final)
         cv2.waitKey(0)
-        close_window("rule of thirds (any key to close)")
+        close_window("Mode 1 zone (any key to close)")
 
 
 def main() -> int:

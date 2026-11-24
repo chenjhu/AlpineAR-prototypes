@@ -38,6 +38,14 @@ from Grasshopper.Kernel import GH_Document
 
 from compas_eve.mqtt import MqttTransport
 
+# The Mode 1 venv's Python: .venv/bin/python on macOS, .venv\Scripts\python.exe on Windows.
+VENV_PYTHON = ("Scripts", "python.exe") if os.name == "nt" else ("bin", "python")
+# How to run it: on Windows without a console window flashing up at each run.
+RUN_OPTIONS = {"creationflags": 0x08000000} if os.name == "nt" else {}
+# Rhino sets PYTHONPATH / PYTHONHOME for its own Python 3.9; the venv's Python must not
+# inherit them, or it loads Rhino's standard library ("SRE module mismatch" on Windows).
+RUN_OPTIONS["env"] = {k: v for k, v in os.environ.items() if not k.upper().startswith("PYTHON")}
+
 OUTLINES = "alpinear/proto1/outlines"
 ANSWER = "alpinear/proto1/answer"
 ZONE = "alpinear/proto1/zone"
@@ -110,8 +118,9 @@ def on_candidate(client, userdata, m):
             f.write(base64.b64decode(data["photo"]))
         zone = next((p for t, p in zones.items() if abs(t - layer_ts) < 0.001), "")
         run = subprocess.run([state["python"], state["replies"], photo, "--ts", repr(ts),
-                              "--layer-ts", repr(layer_ts), "--zone", zone, "--qr-id", str(state["qr_id"])],
-                             capture_output=True, text=True, timeout=60)
+                              "--layer-ts", repr(layer_ts), "--zone", zone, "--qr-id", str(state["qr_id"])]
+                             + (["--tap", "%g,%g" % tuple(data["tap"])] if data.get("tap") else []),
+                             capture_output=True, text=True, timeout=60, **RUN_OPTIONS)
         if run.returncode != 0:
             raise ValueError((run.stderr or run.stdout)[-300:])
         with open(os.path.splitext(photo)[0] + ".fit.json") as f:
@@ -132,7 +141,7 @@ def start(host):
     # for on_candidate (MQTT thread): where replies.py and its Python are
     gh_file = ghenv.Component.OnPingDocument().FilePath  # noqa: F821
     root = os.path.normpath(os.path.join(os.path.dirname(gh_file), "..", ".."))
-    state.update(python=os.path.join(root, "mode1-rule-of-thirds", ".venv", "bin", "python"),
+    state.update(python=os.path.join(root, "mode1-rule-of-thirds", ".venv", *VENV_PYTHON),
                  replies=os.path.join(root, "phone-to-gh", "python", "replies.py"),
                  inbox=os.path.join(root, "phone-to-gh", "demo", "inbox"),
                  qr_id=int(qr_id if qr_id is not None else 10))  # noqa: F821 (GH input)

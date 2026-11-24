@@ -120,8 +120,11 @@ Status: Yes tested end to end on 2026-11-16; No (`ok: false`) tested from
 
 Topic: `alpinear/proto1/zone`
 When: after an answer (message 3) with `ok: true` (flow step 6). The rule
-of thirds from Mode 1 (`../mode1-rule-of-thirds/rule_of_thirds.py`) on the
-two largest stones of that photo.
+from Mode 1 (`../mode1-rule-of-thirds/rule_of_thirds.py`) on the two
+largest stones of that photo. Since 2026-11-23 the **quarter rule**: the new
+stone covers 1/4 to 3/4 of each supporting stone, so with B x long and C y
+long (each measured from its outer end to one joint line in the middle of
+the gap) its length z is `x/4 + y/4 <= z <= 3x/4 + 3y/4`.
 
 ```json
 {
@@ -133,6 +136,7 @@ two largest stones of that photo.
   "min_cm": [[27.6, 30.1], [37.5, 30.1], [37.5, 44.0], [27.6, 44.0]],
   "length_cm": [9.9, 25.2],
   "depth_cm": 13.9,
+  "depth_range_cm": [11.9, 14.6],
   "note": "",
   "ts": 1763297271.2
 }
@@ -142,17 +146,18 @@ two largest stones of that photo.
 |---|---|---|
 | `photo_ts` | number | the photo the zone belongs to (as in message 2) |
 | `image_size` | [int, int] | width, height of that photo in pixels |
-| `max` | list of [int, int] | the **allowed** zone (Mode 1's white box): the next stone must stay inside it. Closed outline, pixels of that photo, origin top-left, y down (as in message 2) |
-| `min` | list of [int, int] | the **must** zone (Mode 1's blue box): the next stone must cover at least this |
+| `max` | list of [int, int] | the **allowed** zone (E_max, between the red lines of the diagrams: 3/4 of each stone from the joint): the next stone must stay inside it. Closed outline, pixels of that photo, origin top-left, y down (as in message 2) |
+| `min` | list of [int, int] | the **must** zone (E_min, the red area: 1/4 of each stone from the joint): the next stone must cover at least this |
 | `max_cm`, `min_cm` | list of [number, number] or null | added 2026-11-18. The same two boxes in cm, in the marker's frame. `null` without a marker |
 | `length_cm` | [number, number] or null | added 2026-11-18. How long the next stone must be, along the wall, in cm: [shortest, longest] = the width of `min` and of `max`. Step 9 checks the candidate stone against this |
-| `depth_cm` | number or null | added 2026-11-18. How deep (across the wall) the zone is, in cm |
+| `depth_cm` | number or null | added 2026-11-18. How deep (across the wall) the drawn boxes are, in cm: the depth both stones share near the joint |
+| `depth_range_cm` | [number, number] or null | added 2026-11-23. How deep the next stone must be, in cm: the average depth of the two supporting stones +- 10 % (each stone's depth = the side of its smallest enclosing rectangle that runs across the wall). Step 9 checks the candidate against this too |
 | `note` | string | empty when there is a zone; otherwise why not (e.g. `need two base stones, found 1`), and `max` / `min` are empty |
 | `ts` | number | time sent |
 
 Pixels, like message 2, because the phone draws the zone over the same
-view as the outlines (2D). With a marker in the photo the rule of thirds is
-computed in cm (a true top view, the photo's tilt taken out), and the pixel
+view as the outlines (2D). With a marker in the photo the rule is
+computed in cm (the marker's affine map, see `python/qr_marker.py`), and the pixel
 boxes are those cm boxes drawn back into the photo.
 
 Status: Tested end to end on 2026-11-16 (Pixel 8 ↔ Grasshopper on the Mac, two runs, PASS). Grasshopper computes it with the photo's
@@ -167,18 +172,22 @@ When: at the stone stock, the person holds the phone over one candidate
 stone and taps (flow step 8). Added 2026-11-18.
 
 ```json
-{"photo": "<JPEG, base64>", "layer_ts": 1763297262.123, "ts": 1763297400.0}
+{"photo": "<JPEG, base64>", "layer_ts": 1763297262.123, "tap": [640.0, 360.0], "ts": 1763297400.0}
 ```
 
 | field | type | what |
 |---|---|---|
 | `photo` | string | top view of **one** candidate stone with the QR marker (Tracker_10) lying flat next to it, JPEG base64, as in message 1 |
 | `layer_ts` | number | the `photo_ts` of the layer whose zone (message 4) the stone is for: the phone's last layer photo answered Yes |
+| `tap` | [number, number], optional | added 2026-11-23. Where the person tapped the stone, in pixels **of this photo** (origin top-left, y down, as in message 2). Grasshopper then grows the stone from that point and looks only around it (`detect_tapped` in `python/replies.py`). Strongly recommended: on the 11-18 test photos it found the stone in about 17 of 20 against about 11 of 20 without (shadows by the paper or table edge were taken instead). Without it, the stone nearest the photo's middle |
 | `ts` | number | time of this photo |
 
-The photo: the candidate in the **middle** of the picture (if more stones
-are in it, Grasshopper takes the one nearest the middle), the marker next
-to it but not touching it, nothing cut by the picture's edge counts. No
+The photo: the marker next to the candidate but not touching it. With a
+`tap`, the tapped stone is measured; without one, the candidate must be in
+the **middle** of the picture (if more stones are in it, Grasshopper takes
+the one nearest the middle) and nothing cut by the picture's edge counts.
+Suggested on the phone: the person taps the stone on the camera view; that
+tap takes the photo and gives `tap` (screen point -> camera image pixels). No
 `ref_cm`: without the marker there is no fit check.
 
 ## 6. Fit check: Grasshopper → phone
@@ -194,6 +203,9 @@ When: right after message 5 (flow steps 9-10). Added 2026-11-18.
   "length_cm": 4.3,
   "width_cm": 3.3,
   "need_cm": [2.8, 5.0],
+  "need_depth_cm": [3.0, 3.7],
+  "along_cm": 4.3,
+  "across_cm": 3.3,
   "image_size": [1280, 720],
   "outline": [[612, 300], [700, 296], [705, 420]],
   "note": "",
@@ -205,22 +217,27 @@ When: right after message 5 (flow steps 9-10). Added 2026-11-18.
 |---|---|---|
 | `photo_ts` | number | the `ts` of the candidate photo (message 5), unchanged |
 | `layer_ts` | number | copied from message 5 |
-| `result` | string | `fits`: long enough to cover the joint and short enough to stay in the zone. `too_short`, `too_long`: try another stone. `unknown`: no check possible, `note` says why (no marker in the photo, no stone found, no zone for `layer_ts`) |
+| `result` | string | `fits`: length and depth both in range. `too_short`, `too_long` (length), `too_shallow`, `too_deep` (depth, added 2026-11-23): try another stone or shape it. `unknown`: no check possible, `note` says why (no marker in the photo, no stone found, no zone for `layer_ts`) |
 | `length_cm` | number or null | the candidate's length in cm (long side of its outline seen from above) |
-| `width_cm` | number or null | its width in cm (short side), for information |
+| `width_cm` | number or null | its short side in cm, checked as the depth |
 | `need_cm` | [number, number] or null | the zone's `length_cm` from message 4: [shortest, longest] |
+| `need_depth_cm` | [number, number] or null | added 2026-11-23. The zone's `depth_range_cm` from message 4; `null` = an older zone, only the length is checked |
+| `along_cm`, `across_cm` | number or null | added 2026-11-23. How to lay it: the side that goes along the wall (z, the length the green box is made for) and the one that goes into it. Usually `length_cm` / `width_cm`; swapped when the stone only fits with its long side into the wall (then `note` says so) |
 | `image_size` | [int, int] | width, height of the candidate photo |
 | `outline` | list of [int, int] | the candidate's outline in that photo's pixels (as in message 2), empty if none |
-| `note` | string | empty, or why `result` is `unknown`, or e.g. `3 stones in the photo, took the one in the middle` |
+| `note` | string | empty, or why `result` is `unknown` (e.g. `no stone at the tap`), or e.g. `3 stones in the photo, took the one in the middle` |
 | `ts` | number | time sent |
 
-The check is only the **length along the wall**: the stone's long side
-must lie between the zone's two lengths (it is laid with its long side
-along the wall). Depth and height are not checked yet. Lengths from a
-photo come out a little long for tall stones (`README.md`), so a
-candidate just over the longest length may still fit.
+The check (since 2026-11-23): the long side between the zone's two
+lengths **and** the short side in the depth range (laid with its long side
+along the wall). A stone that fits the other way round (long side into the
+wall) also `fits`. If neither works, `result` names what is wrong the usual
+way round, checked in this order: length, then depth. Height is not checked.
+Lengths from a photo come out a little long for tall stones (`README.md`),
+so a candidate just over a limit may still fit.
 
-The phone shows the result with a sound: one for `fits`, another for
-`too_short` / `too_long` (flow step 10). Then the person tries the next
+The phone shows the result: green outline, jingle and vibration for `fits`;
+red outline and "Wrong size. Try another stone or shape it." for anything
+else (flow step 10, the group's flow 1.5). Then the person tries the next
 stone (message 5 again) or, after placing a fitting one, starts the next
 layer photo (flow step 11, "New stone?" = message 1 again).

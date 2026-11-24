@@ -246,6 +246,40 @@ reply 0.3–0.4 s after the photo. The phone side is round 4 in
 Not checked: depth / width and height of the candidate (only the length);
 a real candidate photo from the phone.
 
+## Update 2026-11-23 (Windows): quarter rule, depth check, tap on the stone
+
+What changed (all in `python/replies.py` and `../mode1-rule-of-thirds/`,
+which Grasshopper runs as a subprocess, so a `git pull` is enough for them):
+- **The quarter rule** replaces the rule of thirds: the new stone covers
+  1/4 to 3/4 of each stone below, measured to one joint line in the middle
+  of the gap. Message 4 gets `depth_range_cm` (average depth of the two
+  stones +-10 %).
+- **Message 6** checks length **and** depth: new results `too_shallow`,
+  `too_deep`; new fields `need_depth_cm`, `along_cm`, `across_cm` (a stone
+  that only fits with its long side into the wall `fits`, and `along_cm`
+  says which side goes along the wall).
+- **Message 5 has an optional `tap`**: where the person tapped the stone,
+  in photo pixels. The stone is then grown from that point and only the
+  area around it is looked at (`detect_tapped`): on the 11-18 test photos
+  about 17 of 20 stones found against about 11 of 20 before (shadows by the
+  paper or the table edge were taken instead).
+
+**Your task on the Mac** (one script changed: `grasshopper/reply_to_phone.py`
+passes `tap` on as `--tap`):
+1. `git pull`, Rhino 8 → Grasshopper → open `demo/phone_to_gh.gh`.
+2. Run `grasshopper/reload_scripts.py` to put the edited script into the
+   open `.gh`, and save.
+3. Test: `cd python && .venv/bin/python fake_phone.py ../../photos/<a layer
+   photo with the marker> --ref-cm 45 --answer yes --candidate <candidate
+   photo> --tap X,Y` (X,Y = a point on the stone in the candidate photo's
+   pixels). The `info` Panel of `reply to phone` should say `candidate ... ->
+   fits` / `too_...` with the stone's size, not a shadow's. Tested on
+   Windows with `fake_gh.py` (2026-11-23): candidate `234025` with a tap →
+   `fits`, 4.7 x 2.9 cm (without the tap the shadow: 11.2 x 6.6 cm).
+
+The phone sends `tap` since the same day (`unity/OutlineReview.cs`: the
+person taps the stone on the camera view, that tap takes the photo).
+
 ## How to work
 
 Same rules as before: small steps, `MESSAGES.md` is the contract (change it
