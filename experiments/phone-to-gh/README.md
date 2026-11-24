@@ -183,3 +183,10 @@ wall stones (30–65 cm), with the true sizes sealed away until after the run. O
 ground, with stones it had not seen, the wall outlines overlap the true stones by 97–99 %, the
 zone is within ~1 cm, and 11 of 16 candidate stones get the right answer. What changed
 because of it, and what still fails: `realscale_test/README.md`.
+
+## Test pictures
+
+`test_visuals/` is the backup of the pictures from all the tests: real phone photos with what
+Grasshopper answered drawn on them, the first tests with `fake_gh.py`, and the real-scale test's
+screens. Add new ones after a session with `test_visuals/collect.py`. What is where, and which
+pictures are worth a look: `test_visuals/README.md`.
