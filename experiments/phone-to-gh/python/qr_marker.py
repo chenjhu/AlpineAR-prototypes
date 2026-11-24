@@ -45,7 +45,8 @@ FRAME_CORNERS_CM = np.float32([[0, 0], [FRAME_CM, 0], [FRAME_CM, FRAME_CM], [0, 
 class Marker:
     qr_id: int
     corners_px: np.ndarray       # (4, 2) QR corners: top-left, top-right, bottom-right, bottom-left
-    to_cm_h: np.ndarray          # 3x3 (affine) photo px -> cm in the frame
+    to_cm_h: np.ndarray          # 3x3 (affine) photo px -> cm in the frame: for measuring
+    paper_h: np.ndarray | None = None   # 3x3 homography: exact at the marker, for the paper itself
 
     def to_cm(self, pts):
         pts = np.asarray(pts, np.float64).reshape(-1, 1, 2)
@@ -55,9 +56,21 @@ class Marker:
         pts = np.asarray(pts, np.float64).reshape(-1, 1, 2)
         return cv2.perspectiveTransform(pts, np.linalg.inv(self.to_cm_h)).reshape(-1, 2)
 
+    def paper_px(self, pts):
+        """cm in the frame -> photo pixels, for points on the marker's paper:
+        the homography, which goes exactly through the QR's corners and
+        follows the photo's tilt there. (The affine map is the better one for
+        stones far from the marker, but on a big, close, tilted marker it
+        misses the paper's corners by several pixels, and the unpainted rest
+        of the paper was taken for stones: phone photos 2026-11-24.)"""
+        if self.paper_h is None:
+            return self.to_px(pts)
+        pts = np.asarray(pts, np.float64).reshape(-1, 1, 2)
+        return cv2.perspectiveTransform(pts, np.linalg.inv(self.paper_h)).reshape(-1, 2)
+
     def frame_px(self):
         """The 14.8 cm square in photo pixels: origin, end of red, opposite, end of green."""
-        return self.to_px(FRAME_CORNERS_CM)
+        return self.paper_px(FRAME_CORNERS_CM)
 
     def px_per_cm(self):
         """Photo pixels per cm at the marker (for messages only: the scale
@@ -70,7 +83,7 @@ class Marker:
         photo of this shape. An uncut sheet reaches beyond it; see replies.detect()."""
         m = margin_cm
         mask = np.zeros(shape[:2], np.uint8)
-        pts = self.to_px([[-m, -m], [FRAME_CM + m, -m], [FRAME_CM + m, FRAME_CM + m], [-m, FRAME_CM + m]])
+        pts = self.paper_px([[-m, -m], [FRAME_CM + m, -m], [FRAME_CM + m, FRAME_CM + m], [-m, FRAME_CM + m]])
         cv2.fillPoly(mask, [np.int32(np.round(pts))], 255)
         return mask
 
@@ -135,7 +148,7 @@ def find_marker(img, qr_id=10):
     if c is None:
         return None
     c[2] = _bottom_right(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), c)
-    return Marker(int(qr_id), c, affine_to_cm(c))
+    return Marker(int(qr_id), c, affine_to_cm(c), cv2.getPerspectiveTransform(c, QR_CORNERS_CM))
 
 
 def affine_to_cm(corners_px):
