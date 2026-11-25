@@ -6,7 +6,7 @@ Run it after a test session (from experiments/phone-to-gh):
 
 It only adds what is not here yet; nothing is deleted anywhere.
 
-1. phone/<date>/        real phone photos that reached Grasshopper (demo/inbox/, which git
+1. phone/<date>/        real phone photos that reached Grasshopper (wall, new stone, after placing) (demo/inbox/, which git
                         ignores): the photo, the replies Grasshopper sent (.json), and in
                         overlays/ the photo with the reply drawn on it. sheet.jpg: all of the day.
                         Only 16:9 photos (the Pixel 8). The 4:3 ones in the inbox are the
@@ -116,6 +116,27 @@ def draw_cand(img, fit):
     return img, msg
 
 
+def draw_placed(img, msg):
+    """Photo after placing: the base stones (red), the zone, the new stone
+    (green = right, yellow = move) and the arrow, as the phone got them."""
+    img = img.copy()
+    if not msg:
+        return img, "no reply saved"
+    for b in msg.get("base") or []:
+        poly(img, b, RED, 3)
+    poly(img, msg.get("max"), WHITE, 3)
+    poly(img, msg.get("min"), BLUE, 3)
+    ok = msg.get("result") == "ok"
+    poly(img, msg.get("outline"), (0, 200, 0) if ok else YELLOW, 3)
+    if msg.get("arrow"):
+        cv2.arrowedLine(img, tuple(map(int, msg["arrow"][0])), tuple(map(int, msg["arrow"][1])), YELLOW, 4,
+                        cv2.LINE_AA, tipLength=0.3)
+    text = msg.get("result", "?")
+    if text == "move":
+        text += "  %.1f cm along, %.1f cm across" % (msg["move_along_cm"], msg["move_across_cm"])
+    return img, text
+
+
 def sheet(tiles, path, width=420, cols=5):
     """All pictures of a day side by side, each with its name and what the system said."""
     if not tiles:
@@ -148,7 +169,7 @@ def copy(src, dst):
 def phone():
     added, days = 0, {}
     for jpg in sorted(INBOX.glob("*.jpg"), key=lambda p: stamp(p.name) + (p.name,)):
-        if jpg.name.endswith(".qr.jpg") or not jpg.name.startswith(("photo_", "cand_")):
+        if jpg.name.endswith(".qr.jpg") or not jpg.name.startswith(("photo_", "cand_", "placed_")):
             continue
         img = cv2.imread(str(jpg))
         if img is None or abs(img.shape[1] / img.shape[0] - 16 / 9) > 0.05:
@@ -161,9 +182,12 @@ def phone():
         if jpg.name.startswith("photo_"):
             drawn, msg = draw_photo(img, load(INBOX / (stem + ".outlines.json")), load(INBOX / (stem + ".zone.json")))
             kind = "wall"
-        else:
+        elif jpg.name.startswith("cand_"):
             drawn, msg = draw_cand(img, load(INBOX / (stem + ".fit.json")))
             kind = "new stone"
+        else:
+            drawn, msg = draw_placed(img, load(INBOX / (stem + ".placement.json")))
+            kind = "placed"
         banner(drawn, "%s  %s:  %s" % (stem, kind, msg))
         ov = out / "overlays" / (stem + ".jpg")
         if not ov.exists():

@@ -144,15 +144,18 @@ class Canvas:
         self.img = self.img * (1 - alpha) + warped * alpha
         self.masks.append(("marker", np.uint8(alpha[..., 0] > 0.5) * 255))
 
-    def finish(self):
+    def finish(self, rng=None, camera=None):
         """Light falling off to one side, sensor noise, a little blur, the
-        camera tilt; returns (photo BGR uint8, {name: mask})."""
+        camera tilt; returns (photo BGR uint8, {name: mask}). `rng`: another
+        random source (the placement photos, so the rest stays as it was);
+        `camera`: a 3x3 homography after the tilt (the phone held elsewhere)."""
+        rng = RNG if rng is None else rng
         yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
-        a = RNG.uniform(0, 2 * math.pi)
+        a = rng.uniform(0, 2 * math.pi)
         light = 1.0 + 0.12 * ((xx / W - 0.5) * math.cos(a) + (yy / H - 0.5) * math.sin(a))
         r2 = ((xx - W / 2) / W) ** 2 + ((yy - H / 2) / H) ** 2
         img = self.img * (light * (1 - 0.25 * r2))[..., None]
-        img = cv2.GaussianBlur(img, (0, 0), 0.7) + RNG.normal(0, 2.5, img.shape)
+        img = cv2.GaussianBlur(img, (0, 0), 0.7) + rng.normal(0, 2.5, img.shape)
         img = np.clip(img, 0, 255).astype(np.uint8)
         masks = dict(self.masks)
         if self.tilt:
@@ -164,6 +167,9 @@ class Canvas:
             Hm = cv2.getPerspectiveTransform(src, dst)
             img = cv2.warpPerspective(img, Hm, (W, H), borderMode=cv2.BORDER_REFLECT)
             masks = {k: cv2.warpPerspective(m, Hm, (W, H), flags=cv2.INTER_NEAREST) for k, m in masks.items()}
+        if camera is not None:
+            img = cv2.warpPerspective(img, camera, (W, H), borderMode=cv2.BORDER_REFLECT)
+            masks = {k: cv2.warpPerspective(m, camera, (W, H), flags=cv2.INTER_NEAREST) for k, m in masks.items()}
         return img, masks
 
 
@@ -283,6 +289,130 @@ def candidate_sizes(zone):
             ("long", hi * 1.15, mid_d)]
 
 
+# ------------------------------------------------------------- placement
+# Flow after step 10: the stone that fitted is laid on top of the two base
+# stones and the wall is photographed again (added 2026-11-24). The rule, as
+# on the slides: along the wall it covers 1/4 to 3/4 of each base stone,
+# measured from the joint line; across the wall its faces stay in line with
+# the wall's (within FACE_TOL), and a stone deeper than the wall sits in its
+# middle (within FACE_TOL).
+FACE_TOL = 2.5
+PLACEMENTS = [("good", 0.0, 0.0, 1.5), ("along", 1.0, 0.0, 1.5), ("out", 0.0, -7.0, 1.5), ("turned", 0.0, 0.0, 5.0)]
+RNG_P = None                # the placement photos' own random source
+
+
+def plane_cm(mask, ppc):
+    ys, xs = np.nonzero(mask)
+    return np.stack([xs, ys], axis=1).astype(np.float64) / ppc
+
+
+def slide_placement(flat_a, flat_b, flat_c, ppc, u, n):
+    """The rule above for the stone C laid on A and B (masks on the flat ground
+    plane). Returns the truth: spans, how far C may move each way and still
+    be right (cm, along u and n), and 'ok' / 'move'."""
+    pa, pb, pc = plane_cm(flat_a, ppc), plane_cm(flat_b, ppc), plane_cm(flat_c, ppc)
+    ta, tb, tc = pa @ u, pb @ u, pc @ u
+    J = 0.5 * (ta.max() + tb.min())
+    x, y = J - ta.min(), tb.max() - J
+    must = (J - x / 4, J + y / 4)
+    # across: the depth both base stones share near the joint (in the must zone)
+    na, nb = (pa @ n)[ta >= must[0]], (pb @ n)[tb <= must[1]]
+    band = (max(na.min(), nb.min()), min(na.max(), nb.max()))
+    c0, c1 = tc.min(), tc.max()
+    e0, e1 = (pc @ n).min(), (pc @ n).max()
+    # along: shifts s with 1/4 <= (J - (c0+s))/x <= 3/4 and 1/4 <= (c1+s - J)/y <= 3/4
+    s_lo = max(J - c0 - 0.75 * x, J + 0.25 * y - c1)
+    s_hi = min(J - c0 - 0.25 * x, J + 0.75 * y - c1)
+    if e1 - e0 <= band[1] - band[0] + 2 * FACE_TOL:
+        t_lo, t_hi = band[0] - FACE_TOL - e0, band[1] + FACE_TOL - e1
+    else:
+        mid = 0.5 * (band[0] + band[1]) - 0.5 * (e0 + e1)
+        t_lo, t_hi = mid - FACE_TOL, mid + FACE_TOL
+    ok = s_lo <= 0 <= s_hi and t_lo <= 0 <= t_hi
+    return {"joint_u": J, "x_cm": x, "y_cm": y, "c_span_u": [c0, c1], "c_span_n": [e0, e1], "band_n": list(band),
+            "shift_u": [s_lo, s_hi], "shift_n": [t_lo, t_hi],
+            "slack_cm": float(min(-s_lo, s_hi, -t_lo, t_hi)),     # < 0: that far off
+            "expected": "ok" if ok else "move"}
+
+
+def make_placements(sc, rec, parts, stones, marker, inputs, truth, taps):
+    """The wall again, after the stone that fitted (candidate 1) was laid on
+    it: same ground, base stones and marker; the phone held a little
+    differently; the new stone on top looks a little bigger (it is nearer the
+    camera) and casts a soft shadow."""
+    rng = RNG_P
+    cand = rec["candidates"][0]
+    key, (L, D) = cand["source"], cand["made_cm"]
+    u, n, joint = parts["u"], parts["n"], parts["joint"]
+    ppc = W / sc["frame"]
+    flat = parts["flat"]
+    # the true zone's along-wall spans, to put C in the middle of the must zone
+    ta, tb = plane_cm(flat["A"], ppc) @ u, plane_cm(flat["B"], ppc) @ u
+    J = 0.5 * (ta.max() + tb.min())
+    x, y = J - ta.min(), tb.max() - J
+    w_must = (x + y) / 4
+    mid_must = J + (y - x) / 8
+    face = float(joint @ n)
+    out = []
+    for i, (why, along, across, turn) in enumerate(PLACEMENTS, 1):
+        cv = Canvas.__new__(Canvas)
+        cv.ppc, cv.masks, cv.img = ppc, [], parts["ground"].copy()
+        cv.tilt = float(rng.choice([0, 3, 6]))
+        for name in ("A", "B"):
+            (s_img, s_mask), l, d, c, ang = parts[name]
+            cv.paste(name, s_img, s_mask, l, d, c, ang)
+        shift = along * rng.choice([-1, 1]) * (L / 2 - w_must / 2 + 4.0)
+        centre = (mid_must + shift + (rng.uniform(-1, 1) if why == "turned" else 0)) * u \
+            + (face + D / 2 + across + rng.uniform(-0.4, 0.4)) * n
+        ang = sc["wall"] + rng.uniform(-turn, turn) if why != "turned" else sc["wall"] + rng.choice([-1, 1]) * turn
+        # the true footprint, on the ground plane
+        foot = Canvas.__new__(Canvas)
+        foot.ppc, foot.masks, foot.img = ppc, [], np.zeros((H, W, 3), np.float32)
+        foot.paste("C", *stones[key], L, D, centre, ang)
+        flat_c = foot.masks[0][1]
+        # as seen: nearer the camera, so bigger, away from the photo's middle
+        k = rng.uniform(1.03, 1.08)
+        nadir = np.array([W / 2, H / 2]) / ppc
+        seen = nadir + (centre - nadir) * k
+        shadow = Canvas.__new__(Canvas)
+        shadow.ppc, shadow.masks, shadow.img = ppc, [], np.zeros((H, W, 3), np.float32)
+        a = rng.uniform(0, 2 * math.pi)
+        shadow.paste("S", *stones[key], L * k, D * k, seen + 2.0 * np.array([math.cos(a), math.sin(a)]), ang)
+        sh = cv2.GaussianBlur(shadow.masks[0][1].astype(np.float32) / 255, (0, 0), ppc)
+        cv.img *= (1 - 0.35 * sh)[..., None]
+        cv.paste("C", *stones[key], L * k, D * k, seen, ang)
+        cv.paste_marker(marker, *parts["marker"])
+        # the phone held elsewhere: turned, nearer / further, moved
+        rot, scale = rng.uniform(-6, 6), rng.uniform(0.93, 1.07)
+        cam = np.vstack([cv2.getRotationMatrix2D((W / 2, H / 2), rot, scale), [0, 0, 1]])
+        cam[:2, 2] += rng.uniform(-0.05, 0.05, 2) * [W, H]
+        photo, masks = cv.finish(rng=rng, camera=cam)
+        pname = "%s_placed%d.jpg" % (sc["name"], i)
+        cv2.imwrite(str(inputs / pname), photo, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        for kname, m in masks.items():
+            cv2.imwrite(str(truth / ("%s_placed%d_%s.png" % (sc["name"], i, kname))), m)
+        taps[pname] = tap_point(masks["C"])
+        t = slide_placement(flat["A"], flat["B"], flat_c, ppc, u, n)
+        # The move that puts it right, as an arrow in the photo: from C's
+        # middle to where it should be (the middle of the allowed shifts).
+        su = 0.0 if t["shift_u"][0] <= 0 <= t["shift_u"][1] else 0.5 * sum(t["shift_u"])
+        sn = 0.0 if t["shift_n"][0] <= 0 <= t["shift_n"][1] else 0.5 * sum(t["shift_n"])
+        mid = plane_cm(flat_c, ppc).mean(axis=0)
+        tilt_h = np.eye(3)
+        if cv.tilt:
+            tt = math.tan(math.radians(cv.tilt)) * 0.6
+            tilt_h = cv2.getPerspectiveTransform(np.float32([[0, 0], [W, 0], [W, H], [0, H]]),
+                                                 np.float32([[W * tt / 2, 0], [W * (1 - tt / 2), 0], [W, H], [0, H]]))
+        to_photo = cam @ tilt_h
+        ends = cv2.perspectiveTransform(np.float64([mid * ppc, (mid + su * u + sn * n) * ppc]).reshape(-1, 1, 2),
+                                        to_photo).reshape(-1, 2)
+        t.update(photo=pname, why=why, source=key, made_cm=[L, D], parallax=k, tilt_deg=cv.tilt,
+                 move_cm=[su, sn], move_px=ends.round(1).tolist(), px_per_cm_seen=ppc * scale,
+                 camera=to_photo.round(6).tolist())
+        out.append(t)
+    return out
+
+
 def make_marker(photo, out):
     import sys
     sys.path.insert(0, str(HERE.parent / "python"))
@@ -311,9 +441,10 @@ def main():
     if a.make_marker:
         return make_marker(a.make_marker, world / "marker_tracker10.png")
 
-    global RNG
+    global RNG, RNG_P
     cfg = ROUNDS[a.round]
     RNG = np.random.default_rng(cfg["seed"])
+    RNG_P = np.random.default_rng(cfg["seed"] + 1000)
     PAPER.update(cfg.get("paper", {}))
     inputs, truth = HERE / a.round / "inputs", HERE / a.round / "sealed_truth"
     inputs.mkdir(parents=True, exist_ok=True)
@@ -325,11 +456,12 @@ def main():
     for k, (img, mask) in stones.items():
         cv2.imwrite(str(cuts / ("%s.png" % k)), np.dstack([img, mask]))
 
-    taps, all_truth = {}, {}
+    taps, all_truth, placed_taps = {}, {}, {}
     cand_pool = list(cfg["candidates"])
     ground = lambda name: None if name is WHITE else a.grounds / name
     for sc in cfg["scenes"]:
         cv = Canvas(ground(sc["ground"]), sc["frame"], sc["tilt"])
+        ground0 = cv.img.copy()      # the same ground again in the placement photos
         fw, fh = sc["frame"], sc["frame"] * H / W
         u = np.array([math.cos(math.radians(sc["wall"])), math.sin(math.radians(sc["wall"]))])
         n = np.array([-u[1], u[0]])
@@ -339,10 +471,14 @@ def main():
         fp, tp = cfg["face_play"], cfg["turn_play"]
         ca = joint - u * (sc["gap"] / 2 + la / 2) + n * (da / 2 + RNG.uniform(-fp, fp))
         cb = joint + u * (sc["gap"] / 2 + lb / 2) + n * (db / 2 + RNG.uniform(-fp, fp))
-        cv.paste("A", *stones[ka], la, da, ca, sc["wall"] + RNG.uniform(-tp, tp))
-        cv.paste("B", *stones[kb], lb, db, cb, sc["wall"] + RNG.uniform(-tp, tp))
+        ang_a = sc["wall"] + RNG.uniform(-tp, tp)
+        cv.paste("A", *stones[ka], la, da, ca, ang_a)
+        ang_b = sc["wall"] + RNG.uniform(-tp, tp)
+        cv.paste("B", *stones[kb], lb, db, cb, ang_b)
         flat = {k: m.copy() for k, m in cv.masks}
-        cv.paste_marker(marker, joint - n * 22 + u * RNG.uniform(-10, 10), RNG.uniform(0, 360))
+        mk_centre = joint - n * 22 + u * RNG.uniform(-10, 10)
+        mk_angle = RNG.uniform(0, 360)
+        cv.paste_marker(marker, mk_centre, mk_angle)
         photo, masks = cv.finish()
         name = "%s_layer.jpg" % sc["name"]
         cv2.imwrite(str(inputs / name), photo, [cv2.IMWRITE_JPEG_QUALITY, 90])
@@ -375,12 +511,17 @@ def main():
             rec["candidates"].append({"photo": cname, "why": why, "source": key, "made_cm": [L, D],
                                       "true_cm": [ta, tb], "px_per_cm": cc.ppc, "tilt_deg": float(cc.tilt),
                                       "expected": expected_fit(ta, tb, zone["length_cm"], zone["depth_range_cm"])})
+        layer_parts = dict(ground=ground0, A=(stones[ka], la, da, ca, ang_a), B=(stones[kb], lb, db, cb, ang_b),
+                           marker=(mk_centre, mk_angle), flat=flat, u=u, n=n, joint=joint)
+        rec["placements"] = make_placements(sc, rec, layer_parts, stones, marker, inputs, truth, placed_taps)
         all_truth[sc["name"]] = rec
 
+    taps.update(placed_taps)
     (inputs / "taps.json").write_text(json.dumps(taps, indent=1))
     (inputs / "layers.json").write_text(json.dumps(
         {sc["name"]: {"layer": "%s_layer.jpg" % sc["name"],
-                      "candidates": ["%s_cand%d.jpg" % (sc["name"], i) for i in range(1, 5)]} for sc in cfg["scenes"]},
+                      "candidates": ["%s_cand%d.jpg" % (sc["name"], i) for i in range(1, 5)],
+                      "placed": [p["photo"] for p in all_truth[sc["name"]]["placements"]]} for sc in cfg["scenes"]},
         indent=1))
     t = json.dumps(all_truth, indent=1)
     (truth / "truth.json").write_text(t)
@@ -392,6 +533,8 @@ def main():
             s, r["px_per_cm"], fmt(r["stones"]["A"]["true_cm"]), fmt(r["stones"]["B"]["true_cm"]),
             *z["length_cm"], *z["depth_range_cm"],
             ", ".join("%s %s=%s" % (c["photo"][-9:-4], fmt(c["true_cm"]), c["expected"]) for c in r["candidates"])))
+        print("    placed: " + ", ".join("%s %s=%s (slack %.1f, move %.1f/%.1f cm)" % (
+            p["photo"][-11:-4], p["why"], p["expected"], p["slack_cm"], *p["move_cm"]) for p in r["placements"]))
 
 
 def fmt(v):

@@ -29,6 +29,8 @@ import numpy as np
 import paho.mqtt.client as mqtt
 
 # the same code Grasshopper runs (grasshopper/detect_photo.py -> replies.py)
+from qr_marker import find_marker
+from placement import placement_message
 from replies import candidate_stones, detect, draw, fit_message, outlines_message, zone_message
 
 BROKER = "broker.hivemq.com"
@@ -38,6 +40,8 @@ ANSWER = "alpinear/proto1/answer"
 ZONE = "alpinear/proto1/zone"
 CANDIDATE = "alpinear/proto1/candidate"
 FIT = "alpinear/proto1/fit"
+PLACED = "alpinear/proto1/placed"
+PLACEMENT = "alpinear/proto1/placement"
 
 
 def main():
@@ -46,6 +50,9 @@ def main():
     ap.add_argument("--qr-id", type=int, default=10, help="the QR marker that gives the scale (0 = none)")
     ap.add_argument("--broker", default=BROKER)
     ap.add_argument("--save", action="store_true", help="write check_<time>.jpg per photo")
+    ap.add_argument("--placed-only", action="store_true",
+                    help="answer only the placement check (messages 7-8), e.g. next to a Grasshopper "
+                         "whose .gh does not have it yet; layer photos are only kept for it")
     a = ap.parse_args()
     photos = {}  # photo_ts -> (image, detected stones, QR marker), for the zone after a Yes
 
@@ -53,6 +60,8 @@ def main():
         stamp = time.strftime("%H:%M:%S")
         try:
             data = json.loads(m.payload)
+            if a.placed_only and m.topic in (ANSWER, CANDIDATE):
+                return
             if m.topic == ANSWER:
                 print("%s answer: ok=%s for photo_ts %s" % (stamp, data.get("ok"), data.get("photo_ts")))
                 if data.get("ok") is True:
@@ -61,12 +70,18 @@ def main():
             if m.topic == CANDIDATE:
                 send_fit(client, data, stamp)
                 return
+            if m.topic == PLACED:
+                send_placement(client, data, stamp)
+                return
             jpg = np.frombuffer(base64.b64decode(data["photo"]), np.uint8)
             keep(jpg, "layer")
             img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
             found, marker = detect(img, a.stones, a.qr_id)
             msg = outlines_message(found, img.shape[1::-1], data["ts"], marker)
             photos[data["ts"]] = (img, found, marker)
+            if a.placed_only:
+                print("%s photo kept for a placement check (%d stones)" % (stamp, len(found)))
+                return
             client.publish(OUTLINES, json.dumps(msg), qos=1)
             print("%s photo %dx%d -> sent %d outlines (%s points), %s" % (
                 stamp, img.shape[1], img.shape[0], len(msg["stones"]),
@@ -122,10 +137,33 @@ def main():
             cv2.imwrite(name, draw(img, {"stones": [{"id": msg["result"], "outline": msg["outline"]}]} if msg["outline"] else {}))
             print("         drawn -> %s" % name)
 
+    def send_placement(client, data, stamp):
+        jpg = np.frombuffer(base64.b64decode(data["photo"]), np.uint8)
+        keep(jpg, "placed")
+        img = cv2.imdecode(jpg, cv2.IMREAD_COLOR)
+        key = next((t for t in photos if abs(t - data["layer_ts"]) < 0.001), None)
+        layer = outlines = zone = layer_marker = None
+        if key is not None:
+            layer, layer_found, layer_marker = photos[key]
+            outlines = outlines_message(layer_found, layer.shape[1::-1], key, layer_marker)
+            zone = zone_message(layer_found, layer.shape[1::-1], key, layer_marker)
+        marker = find_marker(img, a.qr_id) if a.qr_id else None
+        msg = placement_message(img, layer, marker, layer_marker, outlines or {"stones": []}, zone,
+                                data["ts"], data["layer_ts"], data.get("tap"))
+        client.publish(PLACEMENT, json.dumps(msg), qos=1)
+        print("%s placed -> %s%s%s" % (stamp, msg["result"],
+              ", move %.1f cm along, %.1f across" % (msg["move_along_cm"], msg["move_across_cm"])
+              if msg["result"] == "move" else "", ", " + msg["note"] if msg["note"] else ""))
+        if a.save:
+            name = "placement_%s.jpg" % time.strftime("%Y%m%d_%H%M%S")
+            cv2.imwrite(name, draw(img, {"max": msg["max"], "min": msg["min"],
+                                         "stones": [{"id": msg["result"], "outline": msg["outline"]}] if msg["outline"] else []}))
+            print("         drawn -> %s" % name)
+
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
     client.on_message = on_message
     # subscribe again after every reconnect (the broker forgets subscriptions)
-    client.on_connect = lambda c, u, f, rc, p=None: c.subscribe([(PHOTO, 1), (ANSWER, 1), (CANDIDATE, 1)])
+    client.on_connect = lambda c, u, f, rc, p=None: c.subscribe([(PHOTO, 1), (ANSWER, 1), (CANDIDATE, 1), (PLACED, 1)])
     client.connect(a.broker, 1883)
     print("fake Grasshopper on %s: photo -> outlines (stones=%d), Yes -> zone, candidate -> fit. Ctrl+C to stop"
           % (a.broker, a.stones))

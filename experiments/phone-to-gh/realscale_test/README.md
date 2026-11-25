@@ -43,6 +43,40 @@ Also seen, a fault of the test world: in two candidate photos the stone touches 
 paper. The paper is painted over as ground, which cuts a notch out of the stone. Keep the
 stone off the paper.
 
+## After placing (added 2026-11-24)
+
+Each wall also gets 4 photos taken **after** the stone that fitted (candidate 1)
+was laid on top of the two base stones (`<scene>_placed1-4.jpg`, made by step 1
+with a random source of their own, so the photos above stayed byte for byte
+the same):
+
+| photo | how the stone lies | right answer |
+|---|---|---|
+| placed1 "good" | in the middle of the must zone, faces in line | ok |
+| placed2 "along" | shifted along the wall so 4 cm of the must zone is uncovered | move, back along the wall |
+| placed3 "out" | sticking 7 cm out of the wall's face | move, back into the wall |
+| placed4 "turned" | in the middle, turned by 5° | ok |
+
+As a real second photo: the phone held a little differently (turned up to 6°,
+5 % nearer or further, moved, a different tilt), the new stone 3-8 % bigger
+(nearer the camera) with a soft shadow, other light. The truth: the same rule
+written out again in step 1 (`slide_placement`); a case within 1.5 cm of the
+limit counts as right either way (the measurement's error). A `move` is right
+only if the arrow points within 45° of the true way.
+
+Developed on round 2 (12 of 12 where the layer photo had a marker), then run
+once on round 3:
+
+| round | placements right | new stone found (overlap with the true one) | arrow off |
+|---|---|---|---|
+| 3 | **16 of 16** | 81-94 % | 0-10° |
+
+The 4 "good" stones of round 3 lie within 0.3-1.2 cm of the limit across the
+wall (they are a little deeper than the wall they sit on); the system says ok,
+which counts as right.
+
+The candidate check is unchanged by this: **11 of 16** as before.
+
 ## What was changed in the system (after rounds 1 and 2)
 
 1. **Fit check crashed** when the tap found no stone and the layer had a zone: no reply,
@@ -73,8 +107,11 @@ stone off the paper.
 
 ## The standard test (from 2026-11-24)
 
-Round 3 is the baseline: run it after every change and compare with 11 of 16 right
-(Grasshopper listening in Rhino):
+Round 3 is the baseline: run it after every change (Grasshopper listening in Rhino):
 
     ../python/.venv/Scripts/python.exe step2_run_blind.py --round round3
     ../python/.venv/Scripts/python.exe step3_compare.py --round round3
+
+Compare with: candidates 11 of 16, placements 16 of 16. Until the .gh is rebuilt with
+the placement check, run `python/fake_gh.py --placed-only` next to Grasshopper so the
+placement photos get an answer.

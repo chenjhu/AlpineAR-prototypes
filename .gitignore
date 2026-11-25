@@ -243,3 +243,4 @@ experiments/phone-to-gh/realscale_test/round2/outputs/truth_*.png
 
 # Pictures python/fake_gh.py --save writes into python/ (kept in experiments/phone-to-gh/test_visuals/)
 experiments/phone-to-gh/python/*.jpg
+experiments/phone-to-gh/realscale_test/round*/outputs/screens_placed_*.png

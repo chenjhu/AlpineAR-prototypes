@@ -3,10 +3,11 @@
 # r: compas==2.13.0, compas_model==0.9.3, compas_eve==2.3.0, compas_pb==1.0.0
 """Grasshopper -> phone, flow steps 4-6 and 8-10: send the stone outlines,
 wait for "Are these the stones?", send the zone after a Yes; then answer
-each candidate stone's photo with the fit check.
+each candidate stone's photo with the fit check, and each photo of the wall
+after placing with the placement check.
 
 Message formats: ../MESSAGES.md, messages 2 (outlines), 3 (answer), 4 (zone),
-5 (candidate), 6 (fit). The messages themselves are made by
+5 (candidate), 6 (fit), 7 (placed), 8 (placement). The messages themselves are made by
 ../python/replies.py (run by "detect", and here for a candidate), the same
 code python/fake_gh.py uses.
 
@@ -17,7 +18,9 @@ Inputs:
   listen     bool  the same toggle as "receive photo"
   qr_id      int   the QR marker in the candidate photo (the same Panel as "detect")
 Outputs:
-  info       what was sent and answered -> Panel
+  info         what was sent and answered -> Panel
+  placed_path  the last placement check (inbox/placed_<time>.placement.json)
+               -> "zone curves", which draws the new stone in Rhino
 
 The outlines go out once per detection. The answer and the candidate
 photo arrive on the MQTT thread, which replies right away (the phone waits
@@ -51,6 +54,8 @@ ANSWER = "alpinear/proto1/answer"
 ZONE = "alpinear/proto1/zone"
 CANDIDATE = "alpinear/proto1/candidate"
 FIT = "alpinear/proto1/fit"
+PLACED = "alpinear/proto1/placed"
+PLACEMENT = "alpinear/proto1/placement"
 
 # kept across solves (and across re-opening the .gh while Rhino runs)
 state = sc.sticky.setdefault("alpinear.reply_to_phone", {})
@@ -71,12 +76,19 @@ def stop():
 
 
 def run_again_later():
-    """Background thread -> UI thread -> schedule a new solution of this component."""
+    """Background thread -> UI thread -> schedule a new solution of this component
+    and of "zone curves" (which draws the zone in Rhino once it was sent)."""
     def on_ui():
         comp = state.get("component")
         doc = comp.OnPingDocument() if comp else None
         if doc is not None:
-            doc.ScheduleSolution(1, GH_Document.GH_ScheduleDelegate(lambda d: comp.ExpireSolution(False)))
+            others = [o for o in doc.Objects if getattr(o, "NickName", "") == "zone curves"]
+
+            def expire(d):
+                comp.ExpireSolution(False)
+                for o in others:
+                    o.ExpireSolution(False)
+            doc.ScheduleSolution(1, GH_Document.GH_ScheduleDelegate(expire))
     Rhino.RhinoApp.InvokeOnUiThread(System.Action(on_ui))
 
 
@@ -101,6 +113,7 @@ def on_answer(client, userdata, m):
                 with open(path) as f:
                     zone = json.load(f)
                 sent = send(ZONE, zone)
+                state.setdefault("answered", set()).add(photo_ts)   # "zone curves" shows it from now on
                 note("answer Yes -> zone %s%s" % ("sent" if sent else "NOT sent (not connected)",
                                                  ", " + zone["note"] if zone["note"] else ""))
     except Exception as e:  # a wrong message must not kill the subscription
@@ -136,6 +149,36 @@ def on_candidate(client, userdata, m):
     run_again_later()
 
 
+def on_placed(client, userdata, m):
+    """MQTT thread: message 7, the wall after placing -> placement check -> message 8."""
+    try:
+        data = json.loads(m.payload)
+        layer_ts, ts = float(data["layer_ts"]), float(data["ts"])
+        photo = os.path.join(state["inbox"], "placed_%s.jpg" % time.strftime("%Y%m%d_%H%M%S"))
+        with open(photo, "wb") as f:
+            f.write(base64.b64decode(data["photo"]))
+        zone = next((p for t, p in zones.items() if abs(t - layer_ts) < 0.001), "")
+        run = subprocess.run([state["python"], state["replies"], photo, "--ts", repr(ts), "--placed",
+                              "--layer-ts", repr(layer_ts), "--zone", zone, "--qr-id", str(state["qr_id"])]
+                             + (["--tap", "%g,%g" % tuple(data["tap"])] if data.get("tap") else []),
+                             capture_output=True, text=True, timeout=60, **RUN_OPTIONS)
+        if run.returncode != 0:
+            raise ValueError((run.stderr or run.stdout)[-300:])
+        path = os.path.splitext(photo)[0] + ".placement.json"
+        with open(path) as f:
+            msg = json.load(f)
+        sent = send(PLACEMENT, msg)
+        state["placed_path"] = path
+        note("placed %s -> %s%s%s%s" % (
+            os.path.basename(photo), msg["result"],
+            ", move %.1f cm along, %.1f across" % (msg["move_along_cm"], msg["move_across_cm"])
+            if msg["result"] == "move" else "",
+            ", " + msg["note"] if msg["note"] else "", "" if sent else ", NOT sent (not connected)"))
+    except Exception as e:  # a wrong message must not kill the subscription
+        note("placed photo ignored, %s: %s" % (type(e).__name__, e))
+    run_again_later()
+
+
 def start(host):
     state["component"] = ghenv.Component  # noqa: F821  (the callback re-runs this one)
     # for on_candidate (MQTT thread): where replies.py and its Python are
@@ -151,7 +194,8 @@ def start(host):
     transport = MqttTransport(host, port=1883)
     transport.client.message_callback_add(ANSWER, on_answer)
     transport.client.message_callback_add(CANDIDATE, on_candidate)
-    subscribe = lambda *a, **k: transport.client.subscribe([(ANSWER, 1), (CANDIDATE, 1)])  # noqa: E731
+    transport.client.message_callback_add(PLACED, on_placed)
+    subscribe = lambda *a, **k: transport.client.subscribe([(ANSWER, 1), (CANDIDATE, 1), (PLACED, 1)])  # noqa: E731
     # on every (re)connect: the broker forgets subscriptions after a drop
     transport.on("ready", subscribe)
     if transport.client.is_connected():
@@ -186,7 +230,7 @@ lines = []
 if listen:  # noqa: F821
     start(host)
     connected = state["transport"].client.is_connected()
-    lines.append("replying on %s, answers + candidates in (%s)" % (
+    lines.append("replying on %s, answers + candidates + placed photos in (%s)" % (
         host, "connected" if connected else "connecting..."))
     if json_path:  # noqa: F821
         problem = send_outlines(json_path)  # noqa: F821
@@ -196,3 +240,4 @@ else:
     stop()
     lines.append("not replying (switch listen on)")
 info = "\n".join(lines + log)
+placed_path = state.get("placed_path")

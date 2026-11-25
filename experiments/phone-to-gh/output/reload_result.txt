@@ -3,4 +3,5 @@ reloaded receive photo
 reloaded detect
 reloaded receive contours
 reloaded reply to phone
+reloaded zone curves
 saved: True

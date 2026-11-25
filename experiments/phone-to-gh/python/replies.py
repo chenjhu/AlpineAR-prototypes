@@ -231,7 +231,7 @@ def zone_message(found, image_size, photo_ts, marker=None):
     marker it is computed in cm (a true top view) and drawn back to pixels."""
     msg = {"photo_ts": photo_ts, "image_size": list(image_size), "max": [], "min": [],
            "max_cm": None, "min_cm": None, "length_cm": None, "depth_cm": None,
-           "depth_range_cm": None, "note": ""}
+           "depth_range_cm": None, "wall_cm": None, "note": ""}
     try:
         if marker is None:
             r = compute_zone(*pick_base_pair(found)[:2])
@@ -245,6 +245,13 @@ def zone_message(found, image_size, photo_ts, marker=None):
             msg["length_cm"] = [round(r.must.width / 10, 1), round(r.allowed.width / 10, 1)]
             msg["depth_cm"] = round(r.depth.width / 10, 1)
             msg["depth_range_cm"] = [round(r.stone_depth.lo / 10, 1), round(r.stone_depth.hi / 10, 1)]
+            # The wall's own frame, for the check after placing (placement.py):
+            # along = (p - origin) . u, across = (p - origin) . n, in cm.
+            msg["wall_cm"] = {"origin": _cm([r.origin / 10])[0],
+                              "u": [round(float(v), 5) for v in r.u], "n": [round(float(v), 5) for v in r.n],
+                              "joint": round(r.joint / 10, 2), "x": round(r.x / 10, 2), "y": round(r.y / 10, 2),
+                              "depth": [round(r.depth.lo / 10, 2), round(r.depth.hi / 10, 2)],
+                              "fraction": r.fraction}
     except ValueError as e:  # e.g. fewer than two stones
         msg["note"] = str(e)
     msg["ts"] = time.time()
@@ -370,12 +377,20 @@ def main():
     ap.add_argument("--qr-id", type=int, default=10, help="the QR marker in the photo (0 = do not look)")
     ap.add_argument("--zone", type=Path, help="candidate photo: the layer's .zone.json (message 4)")
     ap.add_argument("--layer-ts", type=float, help="candidate photo: layer_ts from message 5")
-    ap.add_argument("--tap", help="candidate photo: x,y where the person tapped the stone (photo pixels)")
+    ap.add_argument("--tap", help="candidate / placed photo: x,y where the person tapped the stone (photo pixels)")
+    ap.add_argument("--placed", action="store_true", help="the wall after the new stone was laid: "
+                    "check it against the zone (--zone; the layer photo and its outlines lie next to it)")
+    ap.add_argument("--cand", type=Path, help="placed photo: the candidate photo of the stone that fitted "
+                    "(its .fit.json next to it). Default: the last cand_*.fit.json for --layer-ts that fits, "
+                    "next to the zone file")
     a = ap.parse_args()
 
     img = cv2.imread(str(a.photo))
     if img is None:
         sys.exit("cannot read %s" % a.photo)
+    if a.placed:
+        placed(img, a)
+        return
     if a.layer_ts is not None:
         candidate(img, a)
         return
@@ -424,6 +439,56 @@ def candidate(img, a):
                               + (", %.1f-%.1f cm deep)" % tuple(msg["need_depth_cm"]) if msg["need_depth_cm"] else ")")
                               if msg["need_cm"] else "",
                               ", " + msg["note"] if msg["note"] else ""))
+
+
+def last_fitting_candidate(folder, layer_ts):
+    """The newest candidate photo (cand_<time>.jpg) whose fit check (message 6)
+    for this layer said "fits": the stone the person went on to lay."""
+    best = None
+    for f in sorted(folder.glob("cand_*.fit.json")):
+        try:
+            fit = json.loads(f.read_text())
+        except ValueError:
+            continue
+        if fit.get("result") == "fits" and abs(float(fit.get("layer_ts", -1)) - layer_ts) < 0.001:
+            jpg = Path(str(f)[:-len(".fit.json")] + ".jpg")
+            if jpg.is_file():
+                best = jpg
+    return best
+
+
+def placed(img, a):
+    """After placing (messages 7-8): the new stone against the zone -> photo.placement.json."""
+    from placement import placement_message
+    if a.layer_ts is None or not a.zone:
+        sys.exit("--placed needs --layer-ts and --zone")
+    stem = str(a.zone)[:-len(".zone.json")] if str(a.zone).endswith(".zone.json") else str(a.zone.with_suffix(""))
+    zone = json.loads(a.zone.read_text()) if a.zone.is_file() else None
+    layer = cv2.imread(stem + ".jpg")
+    outlines_path = Path(stem + ".outlines.json")
+    outlines = json.loads(outlines_path.read_text()) if outlines_path.is_file() else {"stones": []}
+    tap = [float(v) for v in a.tap.split(",")] if a.tap else None
+    mk1 = find_marker(img, a.qr_id) if a.qr_id else None
+    mk0 = find_marker(layer, a.qr_id) if a.qr_id and layer is not None else None
+    if layer is None:
+        zone = None
+    cand_img = cand_outline = mk_cand = along = None
+    cand_path = a.cand or last_fitting_candidate(Path(stem).parent, a.layer_ts)
+    if cand_path is not None:
+        fit = json.loads(Path(str(cand_path.with_suffix("")) + ".fit.json").read_text())
+        cand_img = cv2.imread(str(cand_path))
+        cand_outline = fit.get("outline")
+        along = fit.get("along_cm")
+        mk_cand = find_marker(cand_img, a.qr_id) if cand_img is not None and a.qr_id else None
+    msg = placement_message(img, layer, mk1, mk0, outlines, zone, a.ts, a.layer_ts, tap,
+                            cand_img, cand_outline, mk_cand, along)
+    Path(str(a.photo.with_suffix("")) + ".placement.json").write_text(json.dumps(msg))
+    d = msg["details"] or {}
+    print("placed: %s%s%s" % (msg["result"],
+                              ", move %.1f cm along, %.1f cm across" % (msg["move_along_cm"], msg["move_across_cm"])
+                              if msg["result"] == "move" else "",
+                              (", covers %.2f / %.2f of the base stones" % tuple(d["cover"]) if d else "")
+                              + (", " + msg["note"] if msg["note"] else "")))
 
 
 if __name__ == "__main__":

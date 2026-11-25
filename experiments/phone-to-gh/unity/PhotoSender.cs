@@ -35,6 +35,8 @@ namespace Compas.GeoViewerXR
         public const string ZoneTopic = "alpinear/proto1/zone";
         public const string CandidateTopic = "alpinear/proto1/candidate";
         public const string FitTopic = "alpinear/proto1/fit";
+        public const string PlacedTopic = "alpinear/proto1/placed";
+        public const string PlacementTopic = "alpinear/proto1/placement";
 
         public string brokerAddress = "broker.hivemq.com";
         public int brokerPort = 1883;
@@ -74,6 +76,9 @@ namespace Compas.GeoViewerXR
 
         /// <summary>Main thread: the raw JSON of a message on <see cref="FitTopic"/>.</summary>
         public event Action<string> FitReceived;
+
+        /// <summary>Main thread: the raw JSON of a message on <see cref="PlacementTopic"/>.</summary>
+        public event Action<string> PlacementReceived;
 
         private const ushort KeepAliveSeconds = 20;
         private const float ConnectTimeout = 10f;
@@ -132,16 +137,16 @@ namespace Compas.GeoViewerXR
             {
                 if (m.topic == OutlinesTopic) OutlinesReceived?.Invoke(m.json);
                 else if (m.topic == ZoneTopic) ZoneReceived?.Invoke(m.json);
+                else if (m.topic == PlacementTopic) PlacementReceived?.Invoke(m.json);
                 else FitReceived?.Invoke(m.json);
             }
 
-            // Live reading while aiming, to check it against a tape measure.
+            // While aiming: only say so when AR has not found the surface yet (the height
+            // and tilt numbers are not needed on screen, 2026-11-25; they stay in the log).
             if (showButton)
             {
                 float height = MeasureHeight(out float tilt, out string source);
-                _heightText = float.IsNaN(height)
-                    ? $"Height: no surface found yet (move the phone a little)   tilt {tilt:0}°"
-                    : $"Height {height:0} cm ({source})   tilt {tilt:0}°";
+                _heightText = float.IsNaN(height) ? "No surface found yet…" : "";
             }
         }
 
@@ -238,9 +243,7 @@ namespace Compas.GeoViewerXR
             }
 
             Handheld.Vibrate();
-            _status = float.IsNaN(LastHeightCm)
-                ? $"Sent ({jpg.Length / 1024} kB), no height"
-                : $"Sent ({jpg.Length / 1024} kB) at {LastHeightCm:0} cm";
+            _status = "Sent";
             _busy = false;
 
             if (PhotoSent != null) PhotoSent(photo, ts);
@@ -259,6 +262,23 @@ namespace Compas.GeoViewerXR
         /// </summary>
         public IEnumerator SendCandidate(double layerTs, Func<int, int, Vector2?> tapInPhoto,
                                          Action<double, Vector2Int, Vector2?> captured, Action<bool> done)
+        {
+            return SendStonePhoto(CandidateTopic, layerTs, tapInPhoto, captured, done);
+        }
+
+        /// <summary>
+        /// After placing: takes a photo of the wall and sends it as MESSAGES.md message 7, for the
+        /// zone of the layer photo <paramref name="layerTs"/>; the same arguments as
+        /// <see cref="SendCandidate"/> (<c>tap</c> = where the person tapped the new stone).
+        /// </summary>
+        public IEnumerator SendPlaced(double layerTs, Func<int, int, Vector2?> tapInPhoto,
+                                      Action<double, Vector2Int, Vector2?> captured, Action<bool> done)
+        {
+            return SendStonePhoto(PlacedTopic, layerTs, tapInPhoto, captured, done);
+        }
+
+        private IEnumerator SendStonePhoto(string topic, double layerTs, Func<int, int, Vector2?> tapInPhoto,
+                                           Action<double, Vector2Int, Vector2?> captured, Action<bool> done)
         {
             Texture2D photo = CapturePhoto();
             if (photo == null)
@@ -285,7 +305,7 @@ namespace Compas.GeoViewerXR
 
             captured(ts, size, tap);
             bool arrived = false;
-            yield return PublishJson(CandidateTopic, JsonConvert.SerializeObject(fields), ok => arrived = ok);
+            yield return PublishJson(topic, JsonConvert.SerializeObject(fields), ok => arrived = ok);
             done(arrived);
         }
 
@@ -353,7 +373,7 @@ namespace Compas.GeoViewerXR
             if (task.Status == TaskStatus.RanToCompletion)
             {
                 _client = task.Result;
-                Debug.Log($"PhotoSender: connected to {brokerAddress}, listening on {OutlinesTopic}, {ZoneTopic}, {FitTopic}");
+                Debug.Log($"PhotoSender: connected to {brokerAddress}, listening on {OutlinesTopic}, {ZoneTopic}, {FitTopic}, {PlacementTopic}");
             }
             else
             {
@@ -377,7 +397,7 @@ namespace Compas.GeoViewerXR
             byte result = client.Connect(Guid.NewGuid().ToString(), null, null, true, KeepAliveSeconds);
             if (result != MqttMsgConnack.CONN_ACCEPTED) throw new Exception($"broker refused (code {result})");
             byte qos1 = MqttMsgBase.QOS_LEVEL_AT_LEAST_ONCE;
-            client.Subscribe(new[] { OutlinesTopic, ZoneTopic, FitTopic }, new[] { qos1, qos1, qos1 });
+            client.Subscribe(new[] { OutlinesTopic, ZoneTopic, FitTopic, PlacementTopic }, new[] { qos1, qos1, qos1, qos1 });
             return client;
         }
 
@@ -402,7 +422,7 @@ namespace Compas.GeoViewerXR
 
         private void OnMessage(object sender, MqttMsgPublishEventArgs e)
         {
-            if (e.Topic == OutlinesTopic || e.Topic == ZoneTopic || e.Topic == FitTopic)
+            if (e.Topic == OutlinesTopic || e.Topic == ZoneTopic || e.Topic == FitTopic || e.Topic == PlacementTopic)
             {
                 _incoming.Enqueue((e.Topic, Encoding.UTF8.GetString(e.Message)));
             }

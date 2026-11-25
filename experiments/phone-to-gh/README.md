@@ -34,6 +34,9 @@ phone ──photo──> [receive photo] ─> [detect] ─> [receive contours] �
 | 8 | Scale from the QR marker Tracker_10 | `python/qr_marker.py`: the printed marker in the photo → homography photo px → cm in its frame (x red, y green); its paper is covered before detection; messages 2 and 4 get cm fields (`MESSAGES.md`, "The scale") | done on the Mac, tested on a composite photo; **not yet on a real phone photo** |
 | 9 | Candidate stone, fit check (flow 8–10). Since 2026-11-23 the quarter rule, length **and** depth, and the person taps the stone (`tap` in message 5) | messages 5–6: `reply to phone` saves the candidate photo, runs `python/replies.py --layer-ts ... --zone ...` (one stone, length in cm vs the zone's `length_cm`) and sends `fits` / `too_short` / `too_long`; `fake_gh.py`, `fake_phone.py --candidate` do the same | Grasshopper done 2026-11-18, tested with `fake_phone.py` (two stones cut from a phone photo: `too_long` 6.0 cm, `fits` 4.3 cm, zone 2.8–5.0, reply in 0.4 s); Unity: `UNITY_TASK.md` round 4 |
 
+| 10 | After placing: is the new stone in the zone? (added 2026-11-24) | messages 7-8: the wall photographed again; `python/placement.py` lines it up with the layer photo (texture points on the stones, else the marker), takes what changed as the new stone, checks it against the quarter rule along the wall and the wall's face across it, and says how far to move it; `reply to phone` answers, `unity/OutlineReview.cs` shows it (green + jingle, or red + arrow) | real-scale test round 3: 16 of 16 (`realscale_test/README.md`); Grasshopper needs the rebuilt .gh (`grasshopper/build_gh_file.py`, then `open_gh_file.py`); not yet on the phone |
+| 11 | The zone in Rhino (added 2026-11-24) | `grasshopper/zone_curves.py`: the allowed zone as a curve, the must zone as a filled surface (blue), the placed stone (green), in the same cm as the stone curves | needs the rebuilt .gh |
+
 **End-to-end test, 2026-11-16:** a tap in the app GeoViewerAR1 (Pixel 8)
 → MQTT → Grasshopper on the Mac → 2 closed curves, one per object, areas
 GH = Python (PASS). Two computer mice stood in for stones; the outlines
@@ -154,18 +157,22 @@ After editing a script in `grasshopper/`, rebuild the .gh with
 | `python/fake_gh.py` | stands in for Grasshopper in steps 3–6: photo in → detection → outlines out (message 2), prints answers (message 3), after a Yes the rule-of-thirds zone (message 4); runs on Windows |
 | `grasshopper/reload_scripts.py` | puts edited scripts into the open `.gh` and saves it (instead of re-opening the file) |
 | `unity/PhotoSender.cs` | copy of the Unity script (flow steps 1-2): photo, send, vibrate on the broker's receipt, its own MQTT connection; the Unity project itself stays outside this repo |
-| `unity/OutlineReview.cs` | copy of the Unity script (flow steps 4-7): outlines over the live camera view, Yes / No, then the zone (white / blue box) and a chime |
+| `unity/OutlineReview.cs` | copy of the Unity script (flow steps 4-10 and the check after placing): outlines over the live camera view, Yes / No, the size, the fit check, Show placement (contour + hatch), Check placement (green + jingle, or red + arrow) |
 | `grasshopper/receive_photo.py` | GH: subscribe, save photo → `photo_path`, `ref_cm`, `photo_ts`, `info` |
 | `grasshopper/detect_photo.py` | GH: photo → `photo_*.json` (curves), `.outlines.json`, `.zone.json` via `python/replies.py` |
-| `grasshopper/reply_to_phone.py` | GH: sends the outlines, receives the answer, sends the zone after a Yes |
+| `grasshopper/reply_to_phone.py` | GH: sends the outlines, receives the answer, sends the zone after a Yes; answers candidates (fit) and placed photos (placement) |
+| `grasshopper/zone_curves.py` | GH: the zone and the placed stone as curves / a surface in Rhino |
+| `grasshopper/open_gh_file.py` | run in Rhino after `build_gh_file.py`: opens the new .gh in place of the open one |
+| `python/placement.py` | the check after placing (messages 7-8): line up, what changed, the rule, the move |
 | `grasshopper/build_gh_file.py` | builds `demo/phone_to_gh.gh` from the four scripts |
 | `grasshopper/test_in_rhino.py` | after sending a photo: reads the open .gh, checks curves and areas → `output/rhino_result.txt` |
 
 ## Not done / limits
 
 - The public broker: anyone who knows the topic can read the photos.
-- One photo at a time. Rhino shows the stone curves (in cm, in the
-  marker's frame when it is in the photo) but not the zone.
+- One photo at a time. Rhino shows the stone curves and the zone (in cm, in
+  the marker's frame; without the marker no zone in Rhino).
+- After placing, the marker must stay where it was for the layer photo.
 - With the marker: the paper flat and best cut; no stone touching it;
   stone tops above the paper look a little bigger (parallax, ~10 % for
   10 cm at 1 m), so lay the paper at the height of the stone tops.

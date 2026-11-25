@@ -2,6 +2,7 @@
 no photo yet
 --- waiting for a photo
 --- no file yet (json_path is empty)
---- replying on broker.hivemq.com, answers + candidates in (connecting...)
+--- replying on broker.hivemq.com, answers + candidates + placed photos in (connecting...)
+--- waiting for a photo
 saved C:\dev\AlpineAR-prototypes\experiments\phone-to-gh\demo\phone_to_gh.gh: True
 now open it in Grasshopper: File > Open > demo/phone_to_gh.gh

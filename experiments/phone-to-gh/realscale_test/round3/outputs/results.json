@@ -51,7 +51,7 @@
     ],
     "note": "",
     "iou": 0.9339769098834647,
-    "seconds": 0.7502295970916748
+    "seconds": 1.1341161727905273
    },
    {
     "photo": "s1_cand2.jpg",
@@ -68,7 +68,7 @@
     ],
     "note": "",
     "iou": 0.9931912006817073,
-    "seconds": 0.8244798183441162
+    "seconds": 1.192305326461792
    },
    {
     "photo": "s1_cand3.jpg",
@@ -85,7 +85,7 @@
     ],
     "note": "",
     "iou": 0.9655114214737419,
-    "seconds": 0.7602407932281494
+    "seconds": 1.1742727756500244
    },
    {
     "photo": "s1_cand4.jpg",
@@ -102,7 +102,93 @@
     ],
     "note": "",
     "iou": 0.9737042128916228,
-    "seconds": 0.7305099964141846
+    "seconds": 1.3529925346374512
+   }
+  ],
+  "placed": [
+   {
+    "photo": "s1_placed1.jpg",
+    "why": "good",
+    "expected": "move",
+    "slack_cm": -0.5603348631689613,
+    "result": "move",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     -1.1717535158885326
+    ],
+    "sys_move_cm": [
+     0.0,
+     1.9
+    ],
+    "arrow_off_deg": 1.1832213712034423,
+    "iou": 0.9228542818342684,
+    "note": "found by its own texture (934 points); lined up by texture (529 points)",
+    "seconds": 1.8485214710235596
+   },
+   {
+    "photo": "s1_placed2.jpg",
+    "why": "along",
+    "expected": "move",
+    "slack_cm": -4.411207576487669,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     -12.737179495514454,
+     -1.122585326263085
+    ],
+    "sys_move_cm": [
+     -13.3,
+     2.3
+    ],
+    "arrow_off_deg": 1.9649790591003204,
+    "iou": 0.9328329886686649,
+    "note": "found by its own texture (1238 points); lined up by texture (366 points)",
+    "seconds": 1.833421230316162
+   },
+   {
+    "photo": "s1_placed3.jpg",
+    "why": "out",
+    "expected": "move",
+    "slack_cm": -4.7223498177284675,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     5.2698301897885695
+    ],
+    "sys_move_cm": [
+     0.0,
+     -4.3
+    ],
+    "arrow_off_deg": 1.422551891095496,
+    "iou": 0.9322573109058927,
+    "note": "found by its own texture (1035 points); lined up by texture (685 points)",
+    "seconds": 1.771913766860962
+   },
+   {
+    "photo": "s1_placed4.jpg",
+    "why": "turned",
+    "expected": "move",
+    "slack_cm": -1.1794283497183145,
+    "result": "move",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     -1.4715158944242965
+    ],
+    "sys_move_cm": [
+     0.0,
+     2.4
+    ],
+    "arrow_off_deg": 0.9130028747719445,
+    "iou": 0.9326827654647701,
+    "note": "found by its own texture (1093 points); lined up by texture (570 points), marker from the layer photo",
+    "seconds": 1.7104153633117676
    }
   ]
  },
@@ -158,7 +244,7 @@
     ],
     "note": "",
     "iou": 0.9901423353927024,
-    "seconds": 0.9041256904602051
+    "seconds": 1.3845908641815186
    },
    {
     "photo": "s2_cand2.jpg",
@@ -175,7 +261,7 @@
     ],
     "note": "",
     "iou": 0.8653400402692922,
-    "seconds": 0.7436025142669678
+    "seconds": 1.0915794372558594
    },
    {
     "photo": "s2_cand3.jpg",
@@ -192,7 +278,7 @@
     ],
     "note": "",
     "iou": 0.9803634516359941,
-    "seconds": 0.734377384185791
+    "seconds": 1.0645983219146729
    },
    {
     "photo": "s2_cand4.jpg",
@@ -209,7 +295,93 @@
     ],
     "note": "",
     "iou": 0.727926827451623,
-    "seconds": 0.7351760864257812
+    "seconds": 1.1249499320983887
+   }
+  ],
+  "placed": [
+   {
+    "photo": "s2_placed1.jpg",
+    "why": "good",
+    "expected": "move",
+    "slack_cm": -0.842903488891217,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     1.1177333471214688
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.9855309997807727,
+    "note": "found by its own texture (864 points); lined up by texture (709 points)",
+    "seconds": 1.7544195652008057
+   },
+   {
+    "photo": "s2_placed2.jpg",
+    "why": "along",
+    "expected": "move",
+    "slack_cm": -4.220277266784407,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     -13.265176501108847,
+     0.9851983205486938
+    ],
+    "sys_move_cm": [
+     -14.5,
+     0.0
+    ],
+    "arrow_off_deg": 3.1685966376489967,
+    "iou": 0.9765451041296335,
+    "note": "found by its own texture (707 points); lined up by texture (926 points)",
+    "seconds": 1.7677092552185059
+   },
+   {
+    "photo": "s2_placed3.jpg",
+    "why": "out",
+    "expected": "move",
+    "slack_cm": -7.998261965179999,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     8.217280672385773
+    ],
+    "sys_move_cm": [
+     0.0,
+     -8.5
+    ],
+    "arrow_off_deg": 0.012538434218553753,
+    "iou": 0.979763692147007,
+    "note": "found by its own texture (879 points); lined up by texture (897 points)",
+    "seconds": 1.7921338081359863
+   },
+   {
+    "photo": "s2_placed4.jpg",
+    "why": "turned",
+    "expected": "move",
+    "slack_cm": -0.24022161028485556,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.4549850715448578
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.9858502050830633,
+    "note": "found by its own texture (881 points); lined up by texture (686 points)",
+    "seconds": 1.836876392364502
    }
   ]
  },
@@ -265,7 +437,7 @@
     ],
     "note": "",
     "iou": 0.9592579546788775,
-    "seconds": 0.7856190204620361
+    "seconds": 1.181751012802124
    },
    {
     "photo": "s3_cand2.jpg",
@@ -282,7 +454,7 @@
     ],
     "note": "",
     "iou": 0.9942358498118645,
-    "seconds": 0.7321183681488037
+    "seconds": 0.984771728515625
    },
    {
     "photo": "s3_cand3.jpg",
@@ -299,7 +471,7 @@
     ],
     "note": "",
     "iou": 0.9744734934716253,
-    "seconds": 0.7464220523834229
+    "seconds": 0.9572358131408691
    },
    {
     "photo": "s3_cand4.jpg",
@@ -316,7 +488,93 @@
     ],
     "note": "",
     "iou": 0.952233011269553,
-    "seconds": 0.7478127479553223
+    "seconds": 1.000133991241455
+   }
+  ],
+  "placed": [
+   {
+    "photo": "s3_placed1.jpg",
+    "why": "good",
+    "expected": "move",
+    "slack_cm": -0.3125,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.9375
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.9493724796039235,
+    "note": "found by its own texture (842 points); lined up by texture (449 points), marker from the layer photo",
+    "seconds": 1.9305870532989502
+   },
+   {
+    "photo": "s3_placed2.jpg",
+    "why": "along",
+    "expected": "move",
+    "slack_cm": -4.5263671875,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     13.037109375,
+     1.0546875
+    ],
+    "sys_move_cm": [
+     13.6,
+     0.0
+    ],
+    "arrow_off_deg": 10.073783769176309,
+    "iou": 0.9509047233238099,
+    "note": "found by its own texture (723 points); lined up by texture (413 points), marker from the layer photo",
+    "seconds": 1.958672285079956
+   },
+   {
+    "photo": "s3_placed3.jpg",
+    "why": "out",
+    "expected": "move",
+    "slack_cm": -6.875,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     7.55859375
+    ],
+    "sys_move_cm": [
+     0.0,
+     -6.5
+    ],
+    "arrow_off_deg": 3.7367796218598546,
+    "iou": 0.9494030446939772,
+    "note": "found by its own texture (706 points); lined up by texture (470 points), marker from the layer photo",
+    "seconds": 1.9289579391479492
+   },
+   {
+    "photo": "s3_placed4.jpg",
+    "why": "turned",
+    "expected": "move",
+    "slack_cm": -0.3125,
+    "result": "move",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.703125
+    ],
+    "sys_move_cm": [
+     0.0,
+     1.6
+    ],
+    "arrow_off_deg": 177.73268616812015,
+    "iou": 0.9535657667033751,
+    "note": "found by its own texture (712 points); lined up by texture (395 points)",
+    "seconds": 1.8620643615722656
    }
   ]
  },
@@ -372,7 +630,7 @@
     ],
     "note": "",
     "iou": 0.9930169266511782,
-    "seconds": 0.759251594543457
+    "seconds": 1.1068739891052246
    },
    {
     "photo": "s4_cand2.jpg",
@@ -389,7 +647,7 @@
     ],
     "note": "",
     "iou": 0.9616039952996475,
-    "seconds": 0.8014779090881348
+    "seconds": 1.1043674945831299
    },
    {
     "photo": "s4_cand3.jpg",
@@ -406,7 +664,7 @@
     ],
     "note": "",
     "iou": 0.9567436256599634,
-    "seconds": 0.7559511661529541
+    "seconds": 1.0075149536132812
    },
    {
     "photo": "s4_cand4.jpg",
@@ -423,7 +681,93 @@
     ],
     "note": "",
     "iou": 0.6877410692952148,
-    "seconds": 0.7592148780822754
+    "seconds": 1.060943365097046
+   }
+  ],
+  "placed": [
+   {
+    "photo": "s4_placed1.jpg",
+    "why": "good",
+    "expected": "ok",
+    "slack_cm": 0.718517883356725,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.0
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.9913978818602269,
+    "note": "found by its own texture (592 points); lined up by texture (857 points)",
+    "seconds": 1.831040382385254
+   },
+   {
+    "photo": "s4_placed2.jpg",
+    "why": "along",
+    "expected": "move",
+    "slack_cm": -4.694890110111174,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     -13.585033176095372,
+     0.0
+    ],
+    "sys_move_cm": [
+     -13.9,
+     0.0
+    ],
+    "arrow_off_deg": 2.3137800209121964,
+    "iou": 0.9694334028625028,
+    "note": "found by its own texture (502 points); lined up by texture (635 points)",
+    "seconds": 1.8347525596618652
+   },
+   {
+    "photo": "s4_placed3.jpg",
+    "why": "out",
+    "expected": "move",
+    "slack_cm": -6.186593503604811,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     7.07353713114696
+    ],
+    "sys_move_cm": [
+     0.0,
+     -7.9
+    ],
+    "arrow_off_deg": 0.4468766204175492,
+    "iou": 0.9857045501370905,
+    "note": "found by its own texture (489 points); lined up by texture (883 points)",
+    "seconds": 1.1542332172393799
+   },
+   {
+    "photo": "s4_placed4.jpg",
+    "why": "turned",
+    "expected": "ok",
+    "slack_cm": 0.0046761066532781115,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.0
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.99119402120387,
+    "note": "found by its own texture (641 points); lined up by texture (809 points), marker from the layer photo",
+    "seconds": 1.1444215774536133
    }
   ]
  }

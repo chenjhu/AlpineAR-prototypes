@@ -84,6 +84,18 @@ class Screen:
         self.put(Image.fromarray(rgba, "RGBA"))
         self.outline(pts, color, 1)
 
+    def arrow(self, a, b, color):
+        """An arrow from photo point a to b (OutlineReview.DrawArrow)."""
+        ov, d = self.layer()
+        (x0, y0), (x1, y1) = self.pt(*a), self.pt(*b)
+        wdt = 8
+        d.line((x0, y0, x1, y1), fill=color, width=wdt)
+        ang = math.atan2(y1 - y0, x1 - x0)
+        head = 40
+        for da in (2.6, -2.6):
+            d.line((x1, y1, x1 + head * math.cos(ang + da), y1 + head * math.sin(ang + da)), fill=color, width=wdt)
+        self.put(ov)
+
     def tap(self, x, y):
         ov, d = self.layer()
         cx, cy = self.pt(x, y)
@@ -247,27 +259,29 @@ def main():
                "sys_length": zone.get("length_cm"), "sys_depth": zone.get("depth_range_cm"),
                "zone_note": zone.get("note"), "candidates": []}
 
-        # Screens: 1 outlines + Yes/No, 2 after Yes, 3 a checked stone, 4 Show placement.
+        # Screens: 1 outlines + Yes/No, 2 after Yes, 3 a checked stone, 4 Preview.
         tiles = []
         s1 = Screen(layer)
         for p in sys_polys:
             s1.outline(p, (255, 0, 0, 255), 3)
         n = len(sys_polys)
-        s1.card("1 stone found" if n == 1 else "%d stones found" % n, [("Yes", True), ("No", False)])
-        tiles.append(s1.tile("1  %d outlines: are these the stones?" % n))
+        s1.card("Use this stone?" if n == 1 else "Use these two stones?" if n == 2 else "Use these %d stones?" % n,
+                [("Yes", True), ("No", False)])
+        tiles.append(s1.tile("1  %d outlines: use these stones?" % n))
         s2 = Screen(layer)
         if zone.get("note"):
-            s2.card("No zone: %s" % zone["note"], [("Show placement", False), ("New photo", False)])
+            s2.card("No zone: %s" % zone["note"], [("Preview", False), ("New photo", False)])
         elif zone.get("length_cm"):
             s2.size_panel(zone["length_cm"], zone["depth_range_cm"])
-            s2.card("Find a stone of this size, then tap it on the screen to check it",
-                    [("Show placement", False), ("New photo", False)])
+            s2.card("Find a stone fitting to the requirements, then tap on it to check it",
+                    [("Preview", False), ("New photo", False)])
         else:
             s2.card("No size without the QR marker in the photo. Take the photo again with it",
-                    [("Show placement", False), ("New photo", False)])
+                    [("Preview", False), ("New photo", False)])
         tiles.append(s2.tile("2  after Yes: the size"))
 
         cand_tiles = []
+        place_tiles, place_truth = [], []
         shown = False
         for c, ct in zip(rp.get("candidates", []), tr["candidates"]):
             fit = c["fit"]
@@ -290,19 +304,19 @@ def main():
                     s3.outline(fit["outline"], (0, 255, 0, 255) if ok else (255, 0, 0, 255), 3)
                     s3.size_panel(zone["length_cm"], zone["depth_range_cm"],
                                   (fit["result"], fit["along_cm"], fit["across_cm"]))
-                    s3.card("This stone fits. Back at the wall, tap Show placement" if ok
+                    s3.card("This stone fits. Tap Preview to preview the placement" if ok
                             else "Wrong size. Try another stone or shape it",
-                            [("Show placement", ok), ("New photo", False)])
+                            [("Preview", ok), ("New photo", False)])
                 elif fit:
                     if zone.get("length_cm"):
                         s3.size_panel(zone["length_cm"], zone["depth_range_cm"])
                     s3.card("No check: %s. Tap the stone again" % fit["note"],
-                            [("Show placement", False), ("New photo", False)])
+                            [("Preview", False), ("New photo", False)])
                 else:
                     if zone.get("length_cm"):
                         s3.size_panel(zone["length_cm"], zone["depth_range_cm"])
                     s3.card("No answer from Grasshopper, tap the stone again",
-                            [("Show placement", False), ("New photo", False)])
+                            [("Preview", False), ("New photo", False)])
                 tiles.append(s3.tile("3  tapped %s: %s" % (c["photo"][3:-4], got)))
                 shown = True
 
@@ -324,15 +338,80 @@ def main():
                 (((fit["note"] if fit else "") or ("no reply: the check crashed" if not fit else ""))[:52],
                  (90, 90, 90))], 480))
 
+        # After placing (messages 7-8): the wall again, the new stone checked.
+        res["placed"] = []
+        for c, pt in zip(rp.get("placed", []), tr.get("placements", [])):
+            msg = c["placement"]
+            ppath = INP / c["photo"]
+            pshape = cv2.imread(str(ppath)).shape[:2]
+            pmask = cv2.imread(str(TRUTH / ("%s_C.png" % c["photo"][:-4])), 0)
+            piou = iou(poly_mask(msg["outline"], pshape), pmask) if msg and msg["outline"] else 0.0
+            got = msg["result"] if msg else "no answer"
+            ang = None
+            if msg and msg.get("arrow") and pt["expected"] == "move":
+                va = np.subtract(msg["arrow"][1], msg["arrow"][0])
+                vb = np.subtract(pt["move_px"][1], pt["move_px"][0])
+                ang = math.degrees(math.acos(np.clip(va @ vb / (np.linalg.norm(va) * np.linalg.norm(vb) + 1e-9), -1, 1)))
+            near = abs(pt["slack_cm"]) < 1.5   # within the measurement: either answer is right
+            right = (got == pt["expected"] and (ang is None or ang < 45)) or (near and got in ("ok", "move"))
+            res["placed"].append({"photo": c["photo"], "why": pt["why"], "expected": pt["expected"],
+                                  "slack_cm": pt["slack_cm"], "result": got, "near": near, "right": right,
+                                  "true_move_cm": pt["move_cm"],
+                                  "sys_move_cm": [msg["move_along_cm"], msg["move_across_cm"]] if msg else None,
+                                  "arrow_off_deg": ang, "iou": piou,
+                                  "note": msg["note"] if msg else "no reply within 30 s", "seconds": c["placement_s"]})
+            # the phone's screen after "Check placement", for each placed photo
+            s5 = Screen(ppath)
+            if msg and msg["max"]:
+                s5.outline(msg["max"], (255, 255, 255, 255), 2)
+                s5.hatch(msg["min"], (26, 128, 255, 255))
+            if msg and msg["outline"]:
+                s5.outline(msg["outline"], (0, 255, 0, 255) if got == "ok" else (255, 0, 0, 255), 3)
+            if msg and msg.get("arrow"):
+                s5.arrow(msg["arrow"][0], msg["arrow"][1], (255, 214, 10, 255))
+            if got == "ok":
+                text = "Well placed. Tap Next stone for the next one"
+            elif got == "move":
+                text = "Move the stone about %d cm the way the arrow shows, then check again" % round(
+                    math.hypot(msg["move_along_cm"], msg["move_across_cm"]))
+            elif msg:
+                text = "No check: %s" % msg["note"]
+            else:
+                text = "No answer from Grasshopper, check again"
+            s5.card(text, [("Check again", got != "ok"), ("Next stone", got == "ok")])
+            place_tiles.append(s5.tile("5  %s (%s): %s" % (c["photo"][3:-4], pt["why"], got)))
+            # truth tile
+            img = cv2.imread(str(ppath))
+            cv2.drawContours(img, [np.int32(contour_of(pmask))], -1, (255, 255, 0), 2)
+            if msg and msg["outline"]:
+                cv2.polylines(img, [np.int32(msg["outline"])], True, (0, 220, 0) if got == "ok" else (0, 0, 255), 3)
+            if msg and msg.get("arrow"):
+                cv2.arrowedLine(img, tuple(msg["arrow"][0]), tuple(msg["arrow"][1]), (0, 0, 255), 4, tipLength=0.25)
+            if pt["expected"] == "move":
+                cv2.arrowedLine(img, tuple(map(int, pt["move_px"][0])), tuple(map(int, pt["move_px"][1])),
+                                (255, 255, 0), 3, tipLength=0.25)
+            tile = Image.fromarray(cv2.cvtColor(cv2.resize(img, (480, 360)), cv2.COLOR_BGR2RGB))
+            place_truth.append(label(tile, [
+                ("%s (%s): true -> %s (%s %.1f cm), move %.1f / %.1f cm" % (
+                    c["photo"][3:-4], pt["why"], pt["expected"], "slack" if pt["slack_cm"] >= 0 else "off",
+                    abs(pt["slack_cm"]), *pt["move_cm"]), (0, 0, 0)),
+                ("system: %s%s, overlap %.0f%%%s" % (
+                    got, ", move %.1f / %.1f cm" % (msg["move_along_cm"], msg["move_across_cm"]) if got == "move" else "",
+                    100 * piou, ", arrow off %.0f deg" % ang if ang is not None else ""),
+                 (0, 140, 0) if right else (200, 0, 0)),
+                ((msg["note"] if msg else "no reply")[:60], (90, 90, 90))], 480))
+
         s4 = Screen(layer)
         for p in sys_polys:
             s4.outline(p, (255, 0, 0, 255), 3)
         s4.outline(zone.get("max") or [], (255, 255, 255, 255), 2)      # allowed zone: a contour
         s4.hatch(zone.get("min") or [], (26, 128, 255, 255))             # must zone: a hatch
-        s4.card("Hold the phone so the red outlines sit on your stones. The new stone must cover the "
-                "hatched zone and stay inside the white outline", [("Back", False), ("Next stone", True)])
-        tiles.append(s4.tile("4  Show placement"))
+        s4.card("Align the red outlines with your stones, then place the new stone so it covers the hatched "
+                "area without crossing the white outline.", [("Back", False), ("Check placement", True)])
+        tiles.append(s4.tile("4  Preview"))
         sheet(tiles, 4).save(OUT / ("screens_%s.png" % scene))
+        if place_tiles:
+            sheet(place_tiles, 4).save(OUT / ("screens_placed_%s.png" % scene))
 
         # Truth sheet: the layer (true = cyan, system = red, zone boxes) + the candidates.
         img = cv2.imread(str(layer))
@@ -355,7 +434,7 @@ def main():
                 rng(zone.get("depth_range_cm")), ("   (" + zone["note"] + ")") if zone.get("note") else ""),
              (0, 0, 0)),
             ("cyan = true stone, red = system outline, white / orange = system zone boxes", (90, 90, 90))], 960)
-        cands = sheet(cand_tiles, 2)
+        cands = sheet(cand_tiles + place_truth, 2)
         out = Image.new("RGB", (max(top.width, cands.width), top.height + cands.height + 20), "white")
         out.paste(top, (0, 0))
         out.paste(cands, (0, top.height + 20))
@@ -380,6 +459,18 @@ def summary(results):
                 c["photo"][3:8], c["why"], *c["true_cm"], c["expected"], c["result"],
                 "%.1f x %.1f" % tuple(c["sys_cm"]) if c["sys_cm"] and c["sys_cm"][0] else ""))
     print("candidates right: %d of %d" % (right, total))
+    pr = pt = 0
+    for scene, r in results.items():
+        for c in r.get("placed", []):
+            pt += 1
+            pr += c["right"]
+            print("   %s %-6s true %-4s (%s %.1f) system %-7s %s overlap %.0f%%%s" % (
+                c["photo"][3:10], c["why"], c["expected"], "slack" if c["slack_cm"] >= 0 else "off",
+                abs(c["slack_cm"]), c["result"],
+                "move %.1f/%.1f" % tuple(c["sys_move_cm"]) if c["result"] == "move" else "",
+                100 * c["iou"], ", arrow off %.0f deg" % c["arrow_off_deg"] if c["arrow_off_deg"] is not None else ""))
+    if pt:
+        print("placements right: %d of %d" % (pr, pt))
 
 
 if __name__ == "__main__":

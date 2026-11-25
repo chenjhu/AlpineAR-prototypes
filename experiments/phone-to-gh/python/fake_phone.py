@@ -37,6 +37,8 @@ ANSWER = "alpinear/proto1/answer"
 ZONE = "alpinear/proto1/zone"
 CANDIDATE = "alpinear/proto1/candidate"
 FIT = "alpinear/proto1/fit"
+PLACED = "alpinear/proto1/placed"
+PLACEMENT = "alpinear/proto1/placement"
 WAIT_S = 15  # like the phone
 LONG_SIDE = 1280  # px, like a phone would send (detection works at 640 px)
 

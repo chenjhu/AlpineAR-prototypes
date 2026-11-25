@@ -152,6 +152,7 @@ the gap) its length z is `x/4 + y/4 <= z <= 3x/4 + 3y/4`.
 | `length_cm` | [number, number] or null | added 2026-11-18. How long the next stone must be, along the wall, in cm: [shortest, longest] = the width of `min` and of `max`. Step 9 checks the candidate stone against this |
 | `depth_cm` | number or null | added 2026-11-18. How deep (across the wall) the drawn boxes are, in cm: the depth both stones share near the joint |
 | `depth_range_cm` | [number, number] or null | added 2026-11-23. How deep the next stone must be, in cm: the average depth of the two supporting stones +- 10 % (each stone's depth = the side of its smallest enclosing rectangle that runs across the wall). Step 9 checks the candidate against this too |
+| `wall_cm` | object or null | added 2026-11-24. The wall's own frame in cm, for the check after placing (message 8): `origin`, `u` (along the wall), `n` (across it), `joint` (the joint line, along u), `x`, `y` (how far each base stone reaches from the joint), `depth` ([lo, hi] across: where the new stone rests), `fraction` (1/4). A point p lies at `(p - origin) . u` along and `(p - origin) . n` across. `null` without a marker. The phone does not need it |
 | `note` | string | empty when there is a zone; otherwise why not (e.g. `need two base stones, found 1`), and `max` / `min` are empty |
 | `ts` | number | time sent |
 
@@ -241,3 +242,86 @@ red outline and "Wrong size. Try another stone or shape it." for anything
 else (flow step 10, the group's flow 1.5). Then the person tries the next
 stone (message 5 again) or, after placing a fitting one, starts the next
 layer photo (flow step 11, "New stone?" = message 1 again).
+
+## 7. Photo after placing: phone → Grasshopper
+
+Topic: `alpinear/proto1/placed`
+When: the new stone is laid on the wall; the person taps it on the camera
+view (or the button "Check placement"). Added 2026-11-24.
+
+```json
+{"photo": "<JPEG, base64>", "layer_ts": 1763297262.123, "tap": [640.0, 360.0], "ts": 1763297500.0}
+```
+
+| field | type | what |
+|---|---|---|
+| `photo` | string | top view of the wall with the new stone on it and the QR marker **where it was for the layer photo**, JPEG base64, as in message 1 |
+| `layer_ts` | number | the `photo_ts` of the layer photo whose zone the stone was laid for |
+| `tap` | [number, number], optional | where the person tapped the new stone, in pixels of this photo (as in message 5). Picks the new stone when more changed in the photo (a hand, a moved tool). Without it, the changed region that lies most in the zone |
+| `ts` | number | time of this photo |
+
+Hold the phone about as for the layer photo. The marker must not be moved;
+it may be cut off in this photo (the photo is lined up with the layer photo
+by the stones' texture, and the marker of the layer photo gives the cm).
+
+## 8. Placement check: Grasshopper → phone
+
+Topic: `alpinear/proto1/placement`
+When: right after message 7. Added 2026-11-24.
+
+```json
+{
+  "photo_ts": 1763297500.0,
+  "layer_ts": 1763297262.123,
+  "result": "move",
+  "image_size": [1280, 720],
+  "outline": [[612, 300], [700, 296], [705, 420]],
+  "outline_cm": [[30.2, 41.0], [36.0, 40.8], [36.2, 33.1]],
+  "max": [[300, 150], [900, 150], [900, 520], [300, 520]],
+  "min": [[480, 150], [720, 150], [720, 520], [480, 520]],
+  "arrow": [[650, 360], [590, 362]],
+  "move_cm": [-4.1, 0.2],
+  "move_along_cm": -4.1,
+  "move_across_cm": 0.0,
+  "details": {"cover": [0.2, 0.71], "length_cm": 34.0, "depth_cm": 29.5,
+              "shift_along_cm": [-6.9, -1.4], "shift_across_cm": [-3.0, 4.2]},
+  "note": "lined up by texture (529 points)",
+  "ts": 1763297501.4
+}
+```
+
+| field | type | what |
+|---|---|---|
+| `photo_ts` | number | the `ts` of message 7, unchanged |
+| `layer_ts` | number | copied from message 7 |
+| `result` | string | `ok`: it lies right. `move`: move it as `arrow` shows. `wrong_size`: no shift makes it right (the stone does not fit this zone). `unknown`: no check, `note` says why (no zone in cm for this layer, the photo cannot be lined up with the layer photo, no new stone found) |
+| `image_size` | [int, int] | width, height of this photo |
+| `outline` | list of [int, int] | the new stone in this photo's pixels (as in message 2), empty if none |
+| `outline_cm` | list of [number, number] or null | the same in cm, the marker's frame |
+| `base` | list of outlines | added 2026-11-25. The base stones of the layer photo (message 2), carried into **this** photo: the phone draws them red, as at the start |
+| `max`, `min` | list of [int, int] | the zone of message 4 drawn into **this** photo (through the marker): the phone draws it again over the new view |
+| `arrow` | [[x, y], [x, y]] or [] | for `move`: from the stone's middle to where its middle should go, pixels of this photo |
+| `move_cm` | [number, number] or null | the same move in cm in the marker's frame |
+| `move_along_cm`, `move_across_cm` | number or null | the same move along the wall (u) and across it (n); 0 where it is right already |
+| `details` | object or null | `cover`: how much of each base stone it covers, measured from the joint (want 0.25-0.75); its `length_cm` / `depth_cm` as seen; the shifts that would be right, along and across |
+| `note` | string | how the photo was lined up, or why `result` is `unknown` |
+| `ts` | number | time sent |
+
+How the new stone is found (`python/placement.py`, since 2026-11-25): it is the
+stone that fitted at the stone stock (the last message 6 for this layer with
+`fits`), so its outline and texture are known. 1. Its texture is matched near
+the tap: its known outline is carried over exactly. 2. Else (laid another face
+up), its known outline is put at the tap, turned the way the fit check said
+it goes along the wall. 3. Else (no tap), it is what **changed** since the
+layer photo (lined up by the stones' texture; a shadow does not count). So the
+phone asks for a tap on the new stone. It is
+right when, along the wall, it covers 1/4 to 3/4 of each base stone from the
+joint (within 1.5 cm, the measurement's error), and across the wall its faces
+stay in line with the wall's within 2.5 cm (a stone deeper than the wall: its
+middle within 2.5 cm of the wall's), plus 1 cm for the measurement. A stone on
+top is nearer the camera and looks a few % bigger; hold the phone above it.
+
+The phone shows the zone (contour + hatch) in the new photo, the stone green
+with the jingle and vibration for `ok`, red with a yellow arrow and "Move the
+stone about N cm the way the arrow shows" for `move`. "Next stone" starts the
+next layer photo (message 1).

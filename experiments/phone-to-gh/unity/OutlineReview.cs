@@ -22,9 +22,14 @@ namespace Compas.GeoViewerXR
     /// (message 6): green outline, jingle and vibration if it fits; red outline and "Wrong size"
     /// if not (no sound, as in the group's flow, 1.5). The panel shows this stone's numbers
     /// next to the needed ones.</item>
-    /// <item>"Show placement" (back at the wall): the layer's outlines and the zone's max
+    /// <item>"Preview" (back at the wall): the layer's outlines and the zone's max
     /// (white) and min (blue) boxes over the live view again. Nothing is sent: the person holds
     /// the phone so the outlines sit on the stones.</item>
+    /// <item>"Check placement" (added 2026-11-24): with the stone laid, the person taps it (or the
+    /// button); that takes a photo of the wall (message 7). Grasshopper finds the new stone as
+    /// what changed since the layer photo and checks it against the zone (message 8): the zone
+    /// drawn again in this photo, the stone green with the jingle and vibration if it is right,
+    /// red with a yellow arrow (which way, how far) if it must move.</item>
     /// </list>
     /// <para>Everything is fixed to the screen (2D), not placed in AR: it matches the stones
     /// only while the phone is where it took the photo.</para>
@@ -41,6 +46,7 @@ namespace Compas.GeoViewerXR
         public Color candidateColor = Color.green;                 // the checked stone, it fits
         public Color wrongSizeColor = Color.red;                   // the checked stone, it does not
         public Color tapColor = new Color(1f, 0.2f, 1f, 1f);       // where the stone was tapped
+        public Color arrowColor = new Color(1f, 0.84f, 0.04f, 1f); // which way to move the placed stone
 
         // In photo pixels; the photo is shown about 3x larger on screen. (New names on
         // 2026-11-24, so the scene's old width of 5 does not carry over.)
@@ -64,7 +70,8 @@ namespace Compas.GeoViewerXR
 
         // Zone: the size is shown (or the zone did not come); from here stones can be tapped.
         // Placement: the layer's outlines and boxes are shown again, back at the wall.
-        private enum State { Off, Waiting, Asking, WaitingZone, Zone, WaitingFit, Placement }
+        // WaitingPlacement / Placed: the placed stone's photo is sent / its check is shown.
+        private enum State { Off, Waiting, Asking, WaitingZone, Zone, WaitingFit, Placement, WaitingPlacement, Placed }
 
         // iOS system colours, for the panel's text.
         private static readonly Color Green = new Color32(48, 209, 88, 255);
@@ -75,6 +82,10 @@ namespace Compas.GeoViewerXR
         private bool _hasZone;
         private double _candidateTs;
         private bool _sendingCandidate;
+        private double _placedTs;
+        private bool _sendingPlaced;
+        private string _placementResult;
+        private const string TapNewStone = "Tap the new stone on the screen to check it";
         private AudioClip _zoneSound, _fitsSound;
         private Texture2D _overlay;  // photo-sized, transparent except the lines
         private Color32[] _pixels;
@@ -86,7 +97,7 @@ namespace Compas.GeoViewerXR
         private string _messageBeforePlacement = "";
         private AudioSource _audio;
 
-        // Kept to draw them again for "Show placement".
+        // Kept to draw them again for "Preview".
         private readonly List<JArray> _stoneOutlines = new List<JArray>();
         private Vector2 _stoneScale = Vector2.one;
         private JArray _zoneMax, _zoneMin;
@@ -118,6 +129,7 @@ namespace Compas.GeoViewerXR
             sender.OutlinesReceived += OnOutlines;
             sender.ZoneReceived += OnZone;
             sender.FitReceived += OnFit;
+            sender.PlacementReceived += OnPlacement;
         }
 
         private void OnDisable()
@@ -127,6 +139,7 @@ namespace Compas.GeoViewerXR
             sender.OutlinesReceived -= OnOutlines;
             sender.ZoneReceived -= OnZone;
             sender.FitReceived -= OnFit;
+            sender.PlacementReceived -= OnPlacement;
         }
 
         private void Update()
@@ -146,6 +159,12 @@ namespace Compas.GeoViewerXR
             {
                 _message = "No answer from Grasshopper, tap the stone again";
                 _state = State.Zone;
+            }
+            else if (_state == State.WaitingPlacement)
+            {
+                _message = "No answer from Grasshopper, check again";
+                _placementResult = null;
+                _state = State.Placed;
             }
         }
 
@@ -191,7 +210,7 @@ namespace Compas.GeoViewerXR
 
                 ShowOverlay();
                 int count = _stoneOutlines.Count;
-                _message = count == 1 ? "1 stone found" : $"{count} stones found";
+                _message = count == 1 ? "Use this stone?" : count == 2 ? "Use these two stones?" : $"Use these {count} stones?";
                 _state = State.Asking;
             }
             catch (Exception e)
@@ -209,7 +228,7 @@ namespace Compas.GeoViewerXR
                 JObject msg = JObject.Parse(json);
                 if (!IsForThisPhoto(msg)) return;
 
-                // The layer's outlines go off the screen now; they come back with "Show placement".
+                // The layer's outlines go off the screen now; they come back with "Preview".
                 ClearOverlay();
                 string note = (string)msg["note"];
                 if (!string.IsNullOrEmpty(note))
@@ -226,7 +245,7 @@ namespace Compas.GeoViewerXR
                     _hasZone = true;
                     _fitResult = null;
                     _message = _needLength != null
-                        ? "Find a stone of this size, then tap it on the screen to check it"
+                        ? "Find a stone fitting to the requirements, then tap on it to check it"
                         : "No size without the QR marker in the photo. Take the photo again with it";
                 }
 
@@ -343,7 +362,7 @@ namespace Compas.GeoViewerXR
                 switch (result)
                 {
                     case "fits":
-                        _message = "This stone fits. Back at the wall, tap Show placement";
+                        _message = "This stone fits.\nTap Preview to preview the placement";
                         _audio.PlayOneShot(_fitsSound);
                         Handheld.Vibrate();
                         break;
@@ -376,8 +395,119 @@ namespace Compas.GeoViewerXR
             DrawHatch(_zoneMin, _zoneScale, minColor);                // must zone: a hatch
             ShowOverlay();
             _messageBeforePlacement = _message;
-            _message = "Hold the phone so the red outlines sit on your stones. The new stone must cover the hatched zone and stay inside the white outline";
+            _message = "Align the red outlines with your stones, then place the new stone so it covers the hatched area without crossing the white outline.";
             _state = State.Placement;
+        }
+
+        /// <summary>
+        /// "Check placement": the stone is laid; the person tapped it at <paramref name="tapGui"/>
+        /// (screen point, GUI coordinates) or pressed the button (null). That takes the photo.
+        /// </summary>
+        private void CheckPlacement(Vector2? tapGui)
+        {
+            if (!_sendingPlaced) StartCoroutine(CheckPlacementRoutine(tapGui));
+        }
+
+        private IEnumerator CheckPlacementRoutine(Vector2? tapGui)
+        {
+            _sendingPlaced = true;
+            _placementResult = null;
+            _message = "Sending the photo of the wall...";
+
+            bool captured = false, arrived = false;
+            Func<int, int, Vector2?> tapInPhoto = null;
+            if (tapGui.HasValue) tapInPhoto = (w, h) => ScreenToPhoto(tapGui.Value, w, h);
+            yield return sender.SendPlaced(_photoTs, tapInPhoto, (ts, size, tap) =>
+            {
+                captured = true;
+                _placedTs = ts;
+                _state = State.WaitingPlacement;
+                _giveUpAt = Time.realtimeSinceStartup + replyTimeout;
+
+                // The layer's outlines no longer match (the phone moved): only the tap.
+                _pixels = new Color32[_photoW * _photoH];
+                if (tap.HasValue) DrawTap(tap.Value, new Vector2((float)_photoW / size.x, (float)_photoH / size.y));
+                ShowOverlay();
+            }, r => arrived = r);
+            _sendingPlaced = false;
+
+            if (!captured)
+            {
+                _message = "No camera image yet, check again";
+            }
+            else if (_state == State.WaitingPlacement)  // the check has not come yet
+            {
+                if (arrived)
+                {
+                    _message = "Checking the placement...";
+                }
+                else
+                {
+                    _state = State.Placed;
+                    _message = "Not sent, check again";
+                }
+            }
+        }
+
+        /// <summary>The placement check (message 8): the zone and the stone in the new photo.</summary>
+        private void OnPlacement(string json)
+        {
+            if (_state != State.WaitingPlacement) return;
+
+            try
+            {
+                JObject msg = JObject.Parse(json);
+                double photoTs = (double?)msg["photo_ts"] ?? -1;
+                if (Math.Abs(photoTs - _placedTs) > 0.001) return;  // another photo's check
+
+                string result = (string)msg["result"];
+                string note = (string)msg["note"];
+                _placementResult = result;
+                bool ok = result == "ok";
+
+                // All of it in the new photo's pixels: it matches the live view while the phone
+                // stays where it took this photo.
+                // Red stays the base stones of the first photo (carried into this photo); the new
+                // stone is green when it lies right, yellow when it must move (2026-11-25).
+                Vector2 scale = ScaleOf(msg);
+                _pixels = new Color32[_photoW * _photoH];
+                foreach (JToken b in msg["base"] ?? new JArray())
+                {
+                    DrawOutline(b as JArray, scale, outlineColor, outlineWidth);
+                }
+                DrawOutline(msg["max"] as JArray, scale, maxColor, boxWidth);
+                DrawHatch(msg["min"] as JArray, scale, minColor);
+                DrawOutline(msg["outline"] as JArray, scale, ok ? candidateColor : arrowColor, outlineWidth);
+                if (msg["arrow"] is JArray arrow && arrow.Count == 2) DrawArrow(arrow, scale, arrowColor);
+                ShowOverlay();
+
+                switch (result)
+                {
+                    case "ok":
+                        _message = "Well placed. Tap Next stone for the next one";
+                        _audio.PlayOneShot(_fitsSound);
+                        Handheld.Vibrate();
+                        break;
+                    case "move":
+                        double along = (double?)msg["move_along_cm"] ?? 0, across = (double?)msg["move_across_cm"] ?? 0;
+                        double cm = Math.Sqrt(along * along + across * across);
+                        _message = $"Move the stone about {Cm(cm)} cm the way the arrow shows, then check again";
+                        break;
+                    case "wrong_size":
+                        _message = "This stone cannot lie right in this zone. Try another stone";
+                        break;
+                    default:  // "unknown": no check possible
+                        _placementResult = null;
+                        _message = $"No check: {note}. Check again";
+                        break;
+                }
+
+                _state = State.Placed;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"OutlineReview: placement message ignored ({e.Message})");
+            }
         }
 
         private void HidePlacement()
@@ -470,6 +600,22 @@ namespace Compas.GeoViewerXR
                 }
             }
             DrawOutline(points, scale, color, 1);
+        }
+
+        /// <summary>An arrow from the first point to the second (photo pixels, y down).</summary>
+        private void DrawArrow(JArray ends, Vector2 scale, Color color)
+        {
+            var a = new Vector2((float)ends[0][0] * scale.x, _photoH - 1 - (float)ends[0][1] * scale.y);
+            var b = new Vector2((float)ends[1][0] * scale.x, _photoH - 1 - (float)ends[1][1] * scale.y);
+            int width = outlineWidth + 2;
+            DrawLine(a, b, color, width);
+            Vector2 back = (a - b).normalized;
+            if (back == Vector2.zero) return;
+            float head = Mathf.Clamp(Vector2.Distance(a, b) * 0.35f, 12f, 40f);
+            foreach (float turn in new[] { 30f, -30f })
+            {
+                DrawLine(b, b + (Vector2)(Quaternion.Euler(0, 0, turn) * back) * head, color, width);
+            }
         }
 
         /// <summary>A small cross where the stone was tapped (photo pixels, y down).</summary>
@@ -747,7 +893,7 @@ namespace Compas.GeoViewerXR
                     break;
 
                 case State.Asking:
-                    AlpineUI.Card(labelRect, $"Are these the stones?  ({_message})");
+                    AlpineUI.Card(labelRect, _message);
                     if (AlpineUI.Button(leftButton, "Yes", true, !_answering)) Answer(true);
                     if (AlpineUI.Button(rightButton, "No", false, !_answering)) Answer(false);
                     break;
@@ -769,7 +915,7 @@ namespace Compas.GeoViewerXR
                     if (_hasZone)
                     {
                         // Blue once a stone fits: that is the next thing to do.
-                        if (AlpineUI.Button(leftButton, "Show placement", _fitResult == "fits", on)) ShowPlacement();
+                        if (AlpineUI.Button(leftButton, "Preview", _fitResult == "fits", on)) ShowPlacement();
                         if (AlpineUI.Button(rightButton, "New photo", false, on)) BackToStart("");
                     }
                     else if (AlpineUI.Button(middleButton, "New photo", false, on))
@@ -779,11 +925,36 @@ namespace Compas.GeoViewerXR
                     break;
 
                 case State.Placement:
-                    AlpineUI.Card(labelRect, _message);
-                    if (AlpineUI.Button(leftButton, "Back", false)) HidePlacement();
-                    // The stone is placed: the next round starts with a new photo of the layer.
-                    if (AlpineUI.Button(rightButton, "Next stone", true)) BackToStart("");
+                case State.WaitingPlacement:
+                case State.Placed:
+                {
+                    Rect placeCard = AlpineUI.Card(labelRect, _message);
+                    bool idle = _state != State.WaitingPlacement && !_sendingPlaced;
+                    // "Check placement" is also a tap on the laid stone (above the text card, below
+                    // the status line at the top): that tap is sent with the photo.
+                    Event ev = Event.current;
+                    if (idle && ev.type == EventType.MouseDown && ev.mousePosition.y < placeCard.y
+                        && ev.mousePosition.y > Screen.height * 0.08f)
+                    {
+                        CheckPlacement(ev.mousePosition);
+                        ev.Use();
+                    }
+                    // The buttons ask for the tap: the tap tells where the new stone lies, and its
+                    // outline from the size check is put there (placement.py).
+                    if (_state == State.Placement)
+                    {
+                        if (AlpineUI.Button(leftButton, "Back", false, idle)) HidePlacement();
+                        if (AlpineUI.Button(rightButton, "Check placement", true, idle)) _message = TapNewStone;
+                    }
+                    else
+                    {
+                        bool placedOk = _placementResult == "ok";
+                        if (AlpineUI.Button(leftButton, "Check again", !placedOk, idle)) _message = TapNewStone;
+                        // The next round starts with a new photo of the layer.
+                        if (AlpineUI.Button(rightButton, "Next stone", placedOk, idle)) BackToStart("");
+                    }
                     break;
+                }
             }
         }
     }

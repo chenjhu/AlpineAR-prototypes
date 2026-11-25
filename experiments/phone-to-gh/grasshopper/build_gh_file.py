@@ -3,8 +3,9 @@
 
   broker / topic / listen -> [receive photo] -> [detect] -> [receive contours] -> curves
                                   info Panel     info Panel  +  info Panel
-                                                     json_path +-> [reply to phone] -> outlines / zone to the phone
-                                                                   info Panel
+                                                     json_path +-> [reply to phone] -> outlines / zone / fit / placement to the phone
+                                                                   info Panel     | placed_path
+                                                               +-> [zone curves] <+   -> the zone and the placed stone in Rhino
 
 receive contours is ../../rhino-contour-to-gh/grasshopper/receive_contours.py,
 unchanged. Re-run after editing any of the scripts (or, with the .gh open,
@@ -24,7 +25,7 @@ import Rhino
 import Grasshopper
 import scriptcontext as sc
 from Grasshopper.Kernel import GH_Document, GH_DocumentIO, GH_ParameterSide
-from Grasshopper.Kernel.Special import GH_BooleanToggle, GH_Panel, GH_Scribble
+from Grasshopper.Kernel.Special import GH_BooleanToggle, GH_ColourSwatch, GH_Panel, GH_Scribble
 
 HERE = os.path.dirname(os.path.realpath(__file__))  # real path, not the /tmp link
 DEMO = os.path.normpath(os.path.join(HERE, "..", "demo"))
@@ -70,6 +71,16 @@ def script(doc, source_path, nickname, inputs, outputs, x, y):
     return comp
 
 
+def preview(doc, colour, x, y):
+    """A Custom Preview with a colour swatch: draws its geometry in that colour."""
+    comp = Grasshopper.Instances.ComponentServer.FindObjectByName("Custom Preview", True, True).CreateInstance()
+    place(doc, comp, x, y)
+    sw = place(doc, GH_ColourSwatch(), x - 70, y + 20)
+    sw.SwatchColour = colour
+    comp.Params.Input[1].AddSource(sw)
+    return comp
+
+
 def by_name(params, name):
     return next(p for p in params if p.NickName == name)
 
@@ -89,7 +100,7 @@ try:
     doc.FilePath = GH_PATH
 
     note = GH_Scribble()
-    note.Text = ("Phone <-> Grasshopper (MESSAGES.md, messages 1-6)\n"
+    note.Text = ("Phone <-> Grasshopper (MESSAGES.md, messages 1-8)\n"
                  "Test without a phone: python/fake_phone.py photo.jpg --ref-cm 45 --answer yes")
     place(doc, note, 40, 10)
 
@@ -114,8 +125,17 @@ try:
     con_info = panel(doc, 950, 230, "info", size=(380, 70))
 
     rep = script(doc, os.path.join(HERE, "reply_to_phone.py"), "reply to phone",
-                 ["broker", "json_path", "listen", "qr_id"], ["info"], 860, 340)
+                 ["broker", "json_path", "listen", "qr_id"], ["info", "placed_path"], 860, 340)
     rep_info = panel(doc, 950, 450, "info", size=(420, 110))
+
+    zon = script(doc, os.path.join(HERE, "zone_curves.py"), "zone curves",
+                 ["json_path", "placed_path"], ["allowed", "must", "placed", "info"], 1180, 100)
+    zon_info = panel(doc, 1420, 230, "info", size=(380, 70))
+    # colours as on the phone: the must zone blue (filled), the allowed zone's
+    # outline dark (white does not show in Rhino), the placed stone green
+    pv_allowed = preview(doc, System.Drawing.Color.FromArgb(255, 40, 40, 40), 1480, 40)
+    pv_must = preview(doc, System.Drawing.Color.FromArgb(120, 25, 128, 255), 1480, 100)
+    pv_placed = preview(doc, System.Drawing.Color.FromArgb(255, 0, 170, 0), 1480, 160)
 
     for src, dst in ((broker, rec.Params.Input[0]), (topic, rec.Params.Input[1]), (listen, rec.Params.Input[2]),
                      (by_name(rec.Params.Output, "photo_path"), det.Params.Input[0]),
@@ -127,19 +147,27 @@ try:
                      (broker, rep.Params.Input[0]),
                      (by_name(det.Params.Output, "json_path"), rep.Params.Input[1]),
                      (listen, rep.Params.Input[2]),
-                     (qr_id, rep.Params.Input[3])):
+                     (qr_id, rep.Params.Input[3]),
+                     (by_name(det.Params.Output, "json_path"), zon.Params.Input[0]),
+                     (by_name(rep.Params.Output, "placed_path"), zon.Params.Input[1]),
+                     (by_name(zon.Params.Output, "allowed"), pv_allowed.Params.Input[0]),
+                     (by_name(zon.Params.Output, "must"), pv_must.Params.Input[0]),
+                     (by_name(zon.Params.Output, "placed"), pv_placed.Params.Input[0])):
         dst.AddSource(src)
     rec_info.AddSource(by_name(rec.Params.Output, "info"))
     det_info.AddSource(by_name(det.Params.Output, "info"))
     con_info.AddSource(by_name(con.Params.Output, "info"))
     rep_info.AddSource(by_name(rep.Params.Output, "info"))
+    zon_info.AddSource(by_name(zon.Params.Output, "info"))
+    for comp in (zon, pv_allowed, pv_must, pv_placed):
+        comp.Hidden = comp is zon   # the zone component's own preview would draw everything grey
 
     doc.Enabled = True
     doc.NewSolution(True)
-    for comp in (rec, det, con, rep):
+    for comp in (rec, det, con, rep, zon):
         for m in comp.RuntimeMessages(Grasshopper.Kernel.GH_RuntimeMessageLevel.Error):
             lines.append("%s error: %s" % (comp.NickName, m))
-    for p in (rec_info, det_info, con_info, rep_info):
+    for p in (rec_info, det_info, con_info, rep_info, zon_info):
         lines.append("--- " + "\n".join(str(g) for g in p.VolatileData.AllData(True)))
 
     lines.append("saved %s: %s" % (GH_PATH, GH_DocumentIO(doc).SaveQuiet(GH_PATH)))

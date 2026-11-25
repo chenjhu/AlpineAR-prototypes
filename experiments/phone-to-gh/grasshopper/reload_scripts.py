@@ -1,6 +1,6 @@
 #! python 3
 """Put the current receive_photo.py / detect_photo.py / receive_contours.py /
-reply_to_phone.py into the phone_to_gh.gh that is OPEN in Grasshopper,
+reply_to_phone.py / zone_curves.py into the phone_to_gh.gh that is OPEN in Grasshopper,
 restart the MQTT connections, and save the file. Use this instead of build_gh_file.py while the
 .gh is open: re-opening a file can pop up dialogs that block Rhino.
 
@@ -20,6 +20,7 @@ SOURCES = {
     "receive photo": os.path.join(HERE, "receive_photo.py"),
     "detect": os.path.join(HERE, "detect_photo.py"),
     "reply to phone": os.path.join(HERE, "reply_to_phone.py"),
+    "zone curves": os.path.join(HERE, "zone_curves.py"),
     "receive contours": os.path.normpath(os.path.join(HERE, "..", "..", "rhino-contour-to-gh", "grasshopper", "receive_contours.py")),
 }
 OUT = os.path.join(HERE, "..", "output", "reload_result.txt")

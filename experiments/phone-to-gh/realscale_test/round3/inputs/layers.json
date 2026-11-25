@@ -6,6 +6,12 @@
    "s1_cand2.jpg",
    "s1_cand3.jpg",
    "s1_cand4.jpg"
+  ],
+  "placed": [
+   "s1_placed1.jpg",
+   "s1_placed2.jpg",
+   "s1_placed3.jpg",
+   "s1_placed4.jpg"
   ]
  },
  "s2": {
@@ -15,6 +21,12 @@
    "s2_cand2.jpg",
    "s2_cand3.jpg",
    "s2_cand4.jpg"
+  ],
+  "placed": [
+   "s2_placed1.jpg",
+   "s2_placed2.jpg",
+   "s2_placed3.jpg",
+   "s2_placed4.jpg"
   ]
  },
  "s3": {
@@ -24,6 +36,12 @@
    "s3_cand2.jpg",
    "s3_cand3.jpg",
    "s3_cand4.jpg"
+  ],
+  "placed": [
+   "s3_placed1.jpg",
+   "s3_placed2.jpg",
+   "s3_placed3.jpg",
+   "s3_placed4.jpg"
   ]
  },
  "s4": {
@@ -33,6 +51,12 @@
    "s4_cand2.jpg",
    "s4_cand3.jpg",
    "s4_cand4.jpg"
+  ],
+  "placed": [
+   "s4_placed1.jpg",
+   "s4_placed2.jpg",
+   "s4_placed3.jpg",
+   "s4_placed4.jpg"
   ]
  }
 }
