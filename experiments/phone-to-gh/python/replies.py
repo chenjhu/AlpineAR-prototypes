@@ -19,6 +19,12 @@ Detects once and writes next to the photo:
     python replies.py cand.jpg --ts 1763297400.0 --layer-ts 1763297262.123 --zone photo.zone.json --tap 640,360
 
 A candidate stone's photo instead: writes cand.fit.json (message 6).
+
+The second mode, "next to a laid stone" (message 1's `mode` = "next_to",
+kept by Grasshopper as photo.msg.json; or --mode next_to): the zone is for a
+stone next to the one laid last on this course (compute_zone_next_to). That
+stone is the last placement check's (placed_*.placement.json in the same
+folder), found again in this photo by its picture; see next_to_layer().
 --tap: where the person tapped the stone (message 5's `tap`); the stone is
 then grown from that point (detect_tapped), much more reliable.
 
@@ -42,7 +48,7 @@ sys.path.insert(0, str(EXPERIMENTS / "mode1-rule-of-thirds"))
 sys.path.insert(0, str(EXPERIMENTS / "rhino-contour-to-gh" / "python"))
 from photo_to_json import SIMPLIFY_PX, stones_to_dict  # noqa: E402
 from qr_marker import find_marker, paint_ground  # noqa: E402
-from rule_of_thirds import compute_zone, pick_base_pair  # noqa: E402
+from rule_of_thirds import compute_zone, compute_zone_next_to, pick_base_pair  # noqa: E402
 from stone_detect import DetectParams, detect_stones, plain_ground_distance, stone_from_points  # noqa: E402
 
 
@@ -67,10 +73,86 @@ def is_plain(img):
     return plain_ground_distance(small, 0.06, 0.5)[1] <= PLAIN_SPREAD
 
 
-def detect(img, stones, qr_id=10):
+def _tight_threshold(img, params):
+    """A ground threshold between the photo's (Otsu over everything) and the
+    stones' own (Otsu over what the first one calls stone). The first one
+    takes the grey halo of shadow around the stones as stone too, which
+    bridges a gap of a few mm between two stones: the next base stone C and
+    the stones under the laid one were one outline (phone test, 2026-11-27)."""
+    d = detect_stones(img, params)
+    gd, fg = d.debug["ground_distance"], d.debug["mask"]
+    if not fg.any():
+        return None
+    t0, _ = cv2.threshold(gd, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    t1, _ = cv2.threshold(gd[fg > 0].reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return 0.5 * (float(t0) + float(t1))
+
+
+def _split_on_ground_distance(img, params, stones, min_px):
+    """Fewer stones than expected: split them on the ground-distance image
+    (how far each pixel's colour is from the ground). There each stone is
+    bright and the gap between two touching stones is darker, even where the
+    usual detection saw one stone: the gap's shadow was taken as stone, or a
+    pale stone lost half its seed to the ground (phone tests 2026-11-27, two
+    base stones side by side: "need two base stones, found 1"). The bright
+    cores are kept while the threshold rises; of the levels where exactly
+    `stones` of them stand apart, the one whose smallest core is biggest
+    (the first level that splits often cuts the brighter stone in two before
+    a pale one stands alone). They seed a watershed inside the stone mask.
+    The outlines are the regions' convex hulls: a pale patch on a stone
+    reads as ground and bit a notch into it. Returns full-resolution Stones,
+    [] if they never come apart."""
+    from stone_detect import _to_stone
+    d = detect_stones(img, params)
+    gd, fg, scale = d.debug["ground_distance"], d.debug["mask"], d.scale
+    if not fg.any():
+        return []
+    t0, _ = cv2.threshold(gd[fg > 0].reshape(-1, 1), 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    core_px = 0.25 * min_px * scale ** 2
+    cores, best = None, -1
+    for level in range(int(t0), 250, 4):
+        n, lab, st, _ = cv2.connectedComponentsWithStats(np.uint8((gd > level) & (fg > 0)))
+        keep = [i for i in range(1, n) if st[i, cv2.CC_STAT_AREA] >= core_px]
+        if len(keep) == stones and min(st[i, cv2.CC_STAT_AREA] for i in keep) > best:
+            cores, best = (lab, keep), min(st[i, cv2.CC_STAT_AREA] for i in keep)
+    if cores is None:
+        return []
+    lab, keep = cores
+    markers = np.zeros(gd.shape, np.int32)
+    markers[cv2.dilate(fg, np.ones((5, 5), np.uint8)) == 0] = 1
+    for k, i in enumerate(keep):
+        markers[lab == i] = k + 2
+    cv2.watershed(cv2.merge([255 - gd] * 3), markers)
+    out = []
+    kernel = np.ones((3, 3), np.uint8)
+    for k in range(len(keep)):
+        region = cv2.morphologyEx(np.uint8((markers == k + 2) & (fg > 0)) * 255, cv2.MORPH_OPEN, kernel)
+        cs, _ = cv2.findContours(region, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+        if cs:
+            c = cv2.convexHull(max(cs, key=cv2.contourArea))
+            if cv2.contourArea(c) >= min_px * scale ** 2:
+                out.append(_to_stone(c, scale))
+    # Hulls that overlap: the cut ran through a stone (the dark gap's shadow read as stone and
+    # joined a pale stone to half its neighbour, 19:34:19). No split rather than a wrong zone.
+    masks = []
+    for st in out:
+        m = np.zeros(img.shape[:2], np.uint8)
+        cv2.drawContours(m, [st.contour], -1, 255, cv2.FILLED)
+        masks.append(m)
+    for i in range(len(out)):
+        for j in range(i + 1, len(out)):
+            if np.count_nonzero(masks[i] & masks[j]) > 0.1 * min(out[i].area, out[j].area):
+                return []
+    return sorted(out, key=lambda st: st.area, reverse=True)
+
+
+def detect(img, stones, qr_id=10, min_cm2=MIN_STONE_CM2, tight=False):
     """The Mode 1 detection on a BGR image; `stones` = how many to expect.
     Returns (stones, marker): marker = the QR `qr_id` found in the photo, or
     None (qr_id 0 = do not look).
+
+    `min_cm2`: smaller stones are dropped (with the marker). `tight`: the
+    stricter ground threshold of _tight_threshold (the second mode's retry).
 
     Not a stone: anything cut by the photo's edge (a laptop, a knee) and,
     with the marker, anything touching its printed square (the rest of an
@@ -91,9 +173,11 @@ def detect(img, stones, qr_id=10):
         off_limits |= cv2.dilate(square, np.ones((5, 5), np.uint8))
         ppc = marker.px_per_cm()
         params = DetectParams(stones=stones, work_width=min(w, 1280),
-                              min_area_frac=MIN_STONE_CM2 * ppc ** 2 / (w * h),
+                              min_area_frac=min_cm2 * ppc ** 2 / (w * h),
                               morph_frac=CLEAN_CM * ppc / w)
     params.plain_ground = is_plain(img)
+    if tight and not params.plain_ground:
+        params.ground_thresh = _tight_threshold(img, params)
 
     def touches(s):
         one = np.zeros((h, w), np.uint8)
@@ -107,7 +191,15 @@ def detect(img, stones, qr_id=10):
         if not out.any():
             break
         img = paint_ground(img, cv2.dilate(out, np.ones((15, 15), np.uint8)))  # with its rim (shadow, blur)
-    return [s for s in found if not touches(s)], marker
+    found = [s for s in found if not touches(s)]
+    if marker is not None and len(found) < stones and not params.plain_ground:
+        # Too few: split on the ground distance (only then, so photos that work stay the same).
+        # Half the minimum size: a split-off stone came out 7-8 cm2 for 8 (the pale one).
+        split = [s for s in _split_on_ground_distance(img, params, stones, 0.5 * min_cm2 * ppc ** 2)
+                 if not touches(s)]
+        if len(split) > len(found):
+            found = split
+    return found, marker
 
 
 TAP_START_CM = 12.0    # first crop around a tap: this far each way
@@ -258,6 +350,208 @@ def zone_message(found, image_size, photo_ts, marker=None):
     return msg
 
 
+ON_TWO, NEXT_TO = "on_two", "next_to"   # message 1's `mode` (MESSAGES.md)
+
+
+def photo_mode(photo):
+    """The mode the phone sent with the photo: Grasshopper keeps message 1's
+    extra fields next to it as photo.msg.json. None there: the first mode."""
+    try:
+        return json.loads(Path(str(photo.with_suffix("")) + ".msg.json").read_text()).get("mode") or ON_TWO
+    except (OSError, ValueError):
+        return ON_TWO
+
+
+def _mask(stone, shape):
+    m = np.zeros(shape[:2], np.uint8)
+    cv2.drawContours(m, [stone.contour], -1, 255, cv2.FILLED)
+    return m
+
+
+def laid_stone(img, marker, folder, qr_id=10):
+    """The stone laid last on this course (D): the newest placement check in
+    `folder` with an outline, found again in this photo by its picture
+    (placement.locate_known_stone / match_known_stone) near where the marker
+    says it was, so a nudged paper or stone does not matter. Returns
+    (outline px or None, info)."""
+    from placement import locate_known_stone, match_known_stone
+    for f in sorted(folder.glob("placed_*.placement.json"), reverse=True):
+        try:
+            m = json.loads(f.read_text())
+        except ValueError:
+            continue
+        if m.get("outline") and m.get("outline_cm"):
+            break
+    else:
+        return None, "no placement check yet in this folder"
+    prev = cv2.imread(str(f)[:-len(".placement.json")] + ".jpg")
+    mk_prev = find_marker(prev, qr_id) if prev is not None and qr_id else None
+    if mk_prev is None:
+        return None, "the last placement photo (%s) has no marker" % f.name
+    cm = np.float32(m["outline_cm"])
+    near = marker.to_px(cm.mean(axis=0, keepdims=True))[0]
+    radius = float(np.ptp(cm, axis=0).max()) * marker.px_per_cm()
+    ppc0, ppc1 = mk_prev.px_per_cm(), marker.px_per_cm()
+    outline, how = locate_known_stone(prev, m["outline"], img, ppc0, ppc1, near, radius)
+    if outline is None:
+        outline, why = match_known_stone(prev, m["outline"], img, ppc0, ppc1, near, radius)
+        how = why if outline is not None else how + "; " + why
+    if outline is None:
+        return None, "the stone of %s is not found here (%s)" % (f.name, how)
+    return outline, "laid stone from %s, %s" % (f.name, how)
+
+
+def _course_axis(stones, near=None, reach=None):
+    """Along the course: the long axis of the stones' pixels (those within
+    `reach` of `near`), pointing to the photo's +x or +y, whichever it runs
+    closer to (as pick_base_pair orders the base stones). On the phone, held
+    upright, +y is the screen's right and +x its top: the wall is built from
+    left to right, or from the bottom up when it runs up the screen."""
+    pts = [s.contour.reshape(-1, 2).astype(np.float32) for s in stones
+           if near is None or np.linalg.norm(np.array(s.centroid) - near) <= reach]
+    pts = np.concatenate(pts)
+    _, _, vt = np.linalg.svd(pts - pts.mean(axis=0), full_matrices=False)
+    ax = vt[0]
+    if (ax[0] if abs(ax[0]) >= abs(ax[1]) else ax[1]) < 0:
+        ax = -ax
+    return ax
+
+
+def pick_next_to(found, laid, shape):
+    """(B as seen, C) for the stone that goes next to `laid` (D). B: a stone
+    under D that reaches past D's end (seen from above, D and the stones it
+    lies on are often one outline). C: the next stone after B along the course,
+    beyond D's end. Raises ValueError if there is none.
+
+    Which end of D: the one with a free base stone C beyond it. Both ends are
+    tried; the photo's axes say nothing about it (the first phone test,
+    2026-11-27: C lay towards the photo's -x, only +x was looked at, so "no next
+    base stone" every time). If both ends have one, the nearer C."""
+    size = float(np.sqrt(max(laid.area, 1.0)))
+    d_c = np.array(laid.centroid, np.float32)
+    ax = _course_axis(found + [laid], d_c, 3 * size)
+    best, errors = None, []
+    for direction in (ax, -ax):
+        try:
+            got = _pick_along(found, laid, shape, direction, size)
+        except ValueError as e:
+            errors.append(str(e))
+            continue
+        if best is None or got[2] < best[2]:
+            best = got
+    if best is None:
+        # the further one got: a base stone under D but no C beats no base stone at all
+        raise ValueError(min(errors, key=lambda e: e.startswith("no base stone")))
+    return best[0], best[1]
+
+
+def _pick_along(found, laid, shape, ax, size):
+    """pick_next_to towards `ax`: (B, C, distance from B's end to C)."""
+    proj = lambda s: s.contour.reshape(-1, 2).astype(np.float32) @ ax
+    d_end = float(proj(laid).max())
+    near = cv2.dilate(_mask(laid, shape), np.ones((3, 3), np.uint8), iterations=max(1, int(0.15 * size)))
+    under = [(int(np.count_nonzero(_mask(s, shape) & near)), s) for s in found]
+    under = [(o, s) for o, s in under if o > 0 and proj(s).max() > d_end + 0.1 * size]
+    if not under:
+        raise ValueError("no base stone found under the laid stone's end")
+    b = max(under, key=lambda t: t[0])[1]
+    b_end = float(proj(b).max())
+    across = np.array([-ax[1], ax[0]], np.float32)
+    nexts = []
+    for s in found:
+        if s is b or proj(s).min() < d_end:
+            continue
+        off = abs(float((np.array(s.centroid) - np.array(b.centroid)) @ across))
+        if off <= size:
+            nexts.append((abs(float(proj(s).min()) - b_end) + off, s))
+    if not nexts:
+        raise ValueError("no next base stone after the laid stone")
+    cost, c = min(nexts, key=lambda t: t[0])
+    return b, c, cost
+
+
+NEXT_TO_MIN_CM2 = 3.0  # the second mode: C may be a small or thin stone (7 cm2, phone test 2026-11-27)
+
+
+def _without_laid(found, laid, shape):
+    """`found` without the pieces of D the detection gave on their own (lying
+    almost wholly inside it; the outline of A + D + B is half D, 2026-11-27)."""
+    if laid is None:
+        return list(found)
+    dm = cv2.dilate(_mask(laid, shape), np.ones((7, 7), np.uint8))
+    return [s for s in found if np.count_nonzero(_mask(s, shape) & dm) < 0.8 * max(s.area, 1.0)]
+
+
+def next_to_layer(img, folder, stones, qr_id, photo_ts):
+    """The layer photo in the second mode. Returns (found, marker, shown,
+    context, zone): `shown` = the stones for message 2, only C, the new base
+    stone the zone reaches onto (the group, 2026-11-27: "only the new stone");
+    everything found when there is no zone. `context` = D and the stones
+    under it, not drawn on the phone but kept in message 2 for the
+    placement check (it lines the photos up on them).
+
+    D (the laid stone) is the last placement check's (laid_stone); without
+    one there is no zone and the phone shows "No zone: ...". The stones: the
+    usual detection, and if that gives no C, once more with the tighter
+    ground threshold (_tight_threshold)."""
+    h, w = img.shape[:2]
+    laid, info, tries = None, "no QR marker", []
+    for tight in (False, True):
+        found, marker = detect(img, stones, qr_id, NEXT_TO_MIN_CM2, tight)
+        if not tries and marker is not None:
+            outline, info = laid_stone(img, marker, folder, qr_id)
+            laid = stone_from_points(np.float32(outline), hull=False) if outline is not None else None
+        rest = _without_laid(found, laid, (h, w))
+        zone, c = zone_message_next_to(rest, laid, (w, h), photo_ts, marker, info)
+        tries.append((found, rest, marker, zone, c, tight))
+        if c is not None or laid is None:
+            break
+    found, rest, marker, zone, c, tight = next((t for t in tries if t[4] is not None), tries[0])
+    if c is None:
+        return found, marker, found, [], zone
+    if tight:
+        zone["laid"] += "; stones found with the tighter ground threshold"
+    return found, marker, [c], [laid] + [s for s in rest if s is not c], zone
+
+
+def zone_message_next_to(found, laid, image_size, photo_ts, marker=None, info=""):
+    """Message 4 in the second mode: the zone next to the laid stone `laid`
+    (compute_zone_next_to), in cm. Its wall_cm has `start` (the laid stone's
+    end, cm along u) and `rule` "next_to"; `x` is what is left of B (r_B).
+    Returns (message, C or None)."""
+    msg = {"photo_ts": photo_ts, "image_size": list(image_size), "max": [], "min": [],
+           "max_cm": None, "min_cm": None, "length_cm": None, "depth_cm": None,
+           "depth_range_cm": None, "wall_cm": None, "mode": NEXT_TO, "laid": info, "note": ""}
+    c = None
+    try:
+        if marker is None:
+            raise ValueError("no QR marker in the photo: the second mode needs it")
+        if laid is None:
+            raise ValueError("the laid stone is not found (%s)" % info)
+        b, c = pick_next_to(found, laid, (image_size[1], image_size[0]))
+        mm = lambda s: stone_from_points(marker.to_cm(s.contour) * 10, hull=False)
+        try:
+            r = compute_zone_next_to(mm(b), mm(c), mm(laid))
+        except ValueError:
+            c = None
+            raise
+        for key, span in (("max", r.allowed), ("min", r.must)):
+            box = r.box(span) / 10.0
+            msg[key], msg[key + "_cm"] = _px(marker.to_px(box)), _cm(box)
+        msg["length_cm"] = [round(r.must.width / 10, 1), round(r.allowed.width / 10, 1)]
+        msg["depth_cm"] = round(r.depth.width / 10, 1)
+        msg["depth_range_cm"] = [round(r.stone_depth.lo / 10, 1), round(r.stone_depth.hi / 10, 1)]
+        msg["wall_cm"] = {"origin": _cm([r.origin / 10])[0],
+                          "u": [round(float(v), 5) for v in r.u], "n": [round(float(v), 5) for v in r.n],
+                          "joint": round(r.joint / 10, 2), "x": round(r.x / 10, 2), "y": round(r.y / 10, 2),
+                          "depth": [round(r.depth.lo / 10, 2), round(r.depth.hi / 10, 2)],
+                          "fraction": r.fraction, "start": round(r.start / 10, 2), "rule": NEXT_TO}
+    except ValueError as e:
+        msg["note"] = str(e)
+    msg["ts"] = time.time()
+    return msg, c
+
+
 def fit_result(a, b, need_length, need_depth=None):
     """The candidate's two sides a >= b (cm) against the zone. Returns
     (result, along, across): "fits" or what is wrong, and which side then
@@ -380,6 +674,8 @@ def main():
     ap.add_argument("--tap", help="candidate / placed photo: x,y where the person tapped the stone (photo pixels)")
     ap.add_argument("--placed", action="store_true", help="the wall after the new stone was laid: "
                     "check it against the zone (--zone; the layer photo and its outlines lie next to it)")
+    ap.add_argument("--mode", choices=[ON_TWO, NEXT_TO], help="layer photo: the mode (default: the "
+                    "photo's .msg.json from Grasshopper, else on_two)")
     ap.add_argument("--cand", type=Path, help="placed photo: the candidate photo of the stone that fitted "
                     "(its .fit.json next to it). Default: the last cand_*.fit.json for --layer-ts that fits, "
                     "next to the zone file")
@@ -396,17 +692,27 @@ def main():
         return
     if a.ref_cm is None:
         sys.exit("a layer photo needs --ref-cm")
-    found, marker = detect(img, a.stones, a.qr_id)
+    h, w = img.shape[:2]
+    mode = a.mode or photo_mode(a.photo)
+    if mode == NEXT_TO:
+        found, marker, shown, context, zone = next_to_layer(img, a.photo.parent, a.stones, a.qr_id, a.ts)
+        print("mode: next to a laid stone, " + zone["laid"])
+    else:
+        found, marker = detect(img, a.stones, a.qr_id)
+        shown, context = found, []
     if not found:
         sys.exit("no stones found" + ("" if marker else " (and no QR %d)" % a.qr_id))
-    h, w = img.shape[:2]
+    if mode != NEXT_TO:
+        zone = zone_message(found, (w, h), a.ts, marker)
 
     stem = a.photo.with_suffix("")
-    stones = stones_file(found, (w, h), marker, a.ref_cm, a.photo.name)
+    stones = stones_file(shown + context, (w, h), marker, a.ref_cm, a.photo.name)
     Path(str(stem) + ".json").write_text(json.dumps(stones, indent=1))
-    outlines = outlines_message(found, (w, h), a.ts, marker)
+    outlines = outlines_message(shown, (w, h), a.ts, marker)
+    if context:
+        # not drawn by the phone; the placement check lines the photos up on them too
+        outlines["context"] = [_px(_outline(s)) for s in context]
     Path(str(stem) + ".outlines.json").write_text(json.dumps(outlines))
-    zone = zone_message(found, (w, h), a.ts, marker)
     Path(str(stem) + ".zone.json").write_text(json.dumps(zone))
 
     if marker:

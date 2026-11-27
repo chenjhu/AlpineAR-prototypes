@@ -115,3 +115,20 @@ Round 3 is the baseline: run it after every change (Grasshopper listening in Rhi
 Compare with: candidates 11 of 16, placements 16 of 16. Until the .gh is rebuilt with
 the placement check, run `python/fake_gh.py --placed-only` next to Grasshopper so the
 placement photos get an answer.
+
+## The second mode, next to a laid stone (2026-11-27)
+
+`mode2_test.py` builds three scenes from the round 3 cut-outs: base stones
+A, B, C, a stone D laid on A and B (with its placement check, as the system
+leaves it), the layer photo in the second mode, a candidate E and E laid
+next to D (good, a 4 cm gap to D, pushed 7 cm out of the face). It runs
+`replies.py` as Grasshopper does; results in `mode2/results.json` and
+`mode2/sheet_<scene>.jpg`.
+
+First run: the zone's lengths within 1.4 cm of the truth (D looks a little
+bigger from above, so r_B comes out up to 1.1 cm short); 8 of 9 placements
+right. The miss (m1 "good") is the depth rule shared with mode 1: E looked
+31.5 cm deep against a 28.1 cm wall band and was sent 1.9 cm across. One
+candidate (m3) came out `too_deep` at 4 % over, the same rule. Finding D
+from the photo alone was tried and gave r_B 20.8 cm for 15.4, so it was
+taken out: without a placement check the zone says so.

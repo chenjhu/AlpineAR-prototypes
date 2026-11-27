@@ -36,6 +36,8 @@ phone ──photo──> [receive photo] ─> [detect] ─> [receive contours] �
 
 | 10 | After placing: is the new stone in the zone? (added 2026-11-24) | messages 7-8: the wall photographed again; `python/placement.py` lines it up with the layer photo (texture points on the stones, else the marker), takes what changed as the new stone, checks it against the quarter rule along the wall and the wall's face across it, and says how far to move it; `reply to phone` answers, `unity/OutlineReview.cs` shows it (green + jingle, or red + arrow) | real-scale test round 3: 16 of 16 (`realscale_test/README.md`); Grasshopper needs the rebuilt .gh (`grasshopper/build_gh_file.py`, then `open_gh_file.py`); not yet on the phone |
 | 11 | The zone in Rhino (added 2026-11-24) | `grasshopper/zone_curves.py`: the allowed zone as a curve, the must zone as a filled surface (blue), the placed stone (green), in the same cm as the stone curves | needs the rebuilt .gh |
+| 12 | Start and the two modes (group's mock-up "first & second interface", 2026-11-27) | `unity/PhotoSender.cs`: Start, then "Where does the new stone go?" with two picture cards. "On two stones" = the quarter rule (everything above). "Next to a laid stone" = the group's rule L_E = r_B + a L_C (`rule_of_thirds.compute_zone_next_to`, `replies.py` finds the laid stone from the last placement check, `placement.check` checks E touches it); the photo carries `mode` (`MESSAGES.md` messages 1 and 4). "Next stone" shows the cards again | cards on the phone 2026-11-27; second mode: `realscale_test/mode2_test.py` 3 scenes, zone length within 1.4 cm, 8 of 9 placements right; Grasshopper needs `reload_scripts.py` (receive_photo.py keeps the mode); not yet on the phone |
+| 13 | Outlines pinned to the QR marker (added 2026-11-27) | `unity/QRAnchoredOverlay.cs`: Preview and the placement check draw the outlines and the zone in AR on the tracked marker (AR Foundation image QR10), so they stay on the stones while the phone moves; until the marker is tracked, the lines fixed to the screen | built, not yet on the phone |
 
 **End-to-end test, 2026-11-16:** a tap in the app GeoViewerAR1 (Pixel 8)
 → MQTT → Grasshopper on the Mac → 2 closed curves, one per object, areas
@@ -54,6 +56,28 @@ Tested in Rhino 8 + Grasshopper (macOS) on the public broker: two photos
 sent with `fake_phone.py` both arrived, Grasshopper re-ran on its own and
 gave closed curves with the same area as Python (`output/rhino_result.txt`, PASS).
 Each photo takes a few seconds from sending to curves.
+
+## Running it on another computer (hand-over, 2026-11-27)
+
+What it takes: the phone with the app (built from the course project with
+the scripts in `unity/`), the printed QR marker 10 (12 cm black square), the
+stones on white paper, and a Windows computer with Rhino 8 running
+`demo/phone_to_gh.gh`.
+
+1. Clone this repo and check out `pipeline-phone-to-gh`.
+2. The detection's Python, once: in `experiments/mode1-rule-of-thirds/`,
+   `py -3.11 -m venv .venv` then `.venv\Scripts\pip install -r requirements.txt`.
+   Grasshopper runs `python/replies.py` with exactly this `.venv`.
+3. Rhino 8 → Grasshopper → open `experiments/phone-to-gh/demo/phone_to_gh.gh`.
+   Its Python components install `compas_eve` etc. themselves the first
+   time (`# r:` lines). The `listen` toggle on, the first `info` Panel says
+   `connected` (broker.hivemq.com, topics `alpinear/proto1/*`).
+4. On the phone: Start → pick "On two stones" or "Next to a laid stone".
+   "Next to a laid stone" needs a placement check of the laid stone first
+   (On two stones → ... → Check placement → Next stone), in the same
+   `demo/inbox/` folder. Photos and replies land in `demo/inbox/` (not in git).
+
+Only one Grasshopper may listen at a time (two would both answer the phone).
 
 ## Try it
 

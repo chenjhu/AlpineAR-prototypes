@@ -73,10 +73,14 @@ class ZoneResult:
     depth: Span              # across the wall: where the new stone should sit (drawing)
     outer: Span              # across the wall: union of both stones (for drawing)
     stone_depth: Span        # how deep the new stone should be: average of the two +- 10 %
+    start: float | None = None   # next to a laid stone (compute_zone_next_to): its end along u
 
     @property
     def x(self) -> float:
-        """Length of the left stone B: its outer end to the joint line."""
+        """Length of the left stone B: its outer end to the joint line. Next to a
+        laid stone: what is left of B's top, from the laid stone's end to the joint."""
+        if self.start is not None:
+            return self.joint - self.start
         return self.joint - self.left_span.lo
 
     @property
@@ -242,6 +246,66 @@ def compute_zone(left: Stone, right: Stone, fraction: float = QUARTER) -> ZoneRe
         fraction=fraction, must=must, allowed=allowed, depth=depth,
         outer=Span(float(min(ln.min(), rn.min())), float(max(ln.max(), rn.max()))),
         stone_depth=stone_depth,
+    )
+
+
+def compute_zone_next_to(left: Stone, right: Stone, laid: Stone,
+                         fraction: float = QUARTER) -> ZoneResult:
+    """The second mode, "next to a laid stone" (the group's rule, 2026-11-27).
+    On this course a stone D is laid already; the new stone E goes right of
+    it, on B (under D's right end) and C (the next base stone):
+
+        E touches D, covers the rest of B's top (r_B, from D's end to the
+        joint) and 1/4 .. 3/4 of C:   L_E = r_B + a L_C,  1/4 <= a <= 3/4
+
+    so must zone = [D's end, J + y/4], allowed zone = [D's end, J + 3y/4]
+    (y = L_C). `left`: B as seen, with D on it (from above they touch, so they
+    may be one outline, with A too); `right`: C; `laid`: D. The new stone's
+    depth: the average of B (its part right of D) and C, +- 10 %, as in
+    compute_zone."""
+    c_left = np.asarray(left.centroid, np.float32)
+    u = _wall_direction(left, right)
+    n = np.array([-u[1], u[0]], np.float32)
+
+    def project(stone, origin):
+        d = _points(stone) - origin
+        return d @ u, d @ n
+
+    lu, _ = project(left, c_left)
+    origin = c_left + float(lu.min()) * u
+    lu, ln = project(left, origin)
+    ru, rn = project(right, origin)
+    du, _ = project(laid, origin)
+    L = Span(float(lu.min()), float(lu.max()))
+    R = Span(float(ru.min()), float(ru.max()))
+    joint = 0.5 * (L.hi + R.lo)
+    start = float(du.max())
+    if start >= joint:
+        raise ValueError("the laid stone already reaches past the joint to the next base stone")
+    y = R.hi - joint
+    must = Span(start, joint + fraction * y)
+    allowed = Span(start, joint + (1 - fraction) * y)
+
+    near_l, near_r = ln[lu >= start], rn[ru <= must.hi]
+    if near_l.size == 0:
+        near_l = ln
+    if near_r.size == 0:
+        near_r = rn
+    dl = Span(float(near_l.min()), float(near_l.max()))
+    dr = Span(float(near_r.min()), float(near_r.max()))
+    depth = Span(max(dl.lo, dr.lo), min(dl.hi, dr.hi))
+    if depth.width < 0.5 * min(dl.width, dr.width):
+        depth = Span((dl.lo + dr.lo) / 2, (dl.hi + dr.hi) / 2)
+    # B's depth from its part right of D (the rest is under D, or is A)
+    mean_depth = 0.5 * (dl.width + _depth_across(right, n))
+    stone_depth = Span((1 - DEPTH_TOLERANCE) * mean_depth, (1 + DEPTH_TOLERANCE) * mean_depth)
+
+    return ZoneResult(
+        left=left, right=right, origin=origin, u=u, n=n,
+        left_span=L, right_span=R, joint=joint, gap=R.lo - L.hi,
+        fraction=fraction, must=must, allowed=allowed, depth=depth,
+        outer=Span(float(min(ln.min(), rn.min())), float(max(ln.max(), rn.max()))),
+        stone_depth=stone_depth, start=start,
     )
 
 

@@ -20,6 +20,7 @@ The MQTT callback runs on a background thread: it only writes the file and
 asks Grasshopper to run this component again; everything else happens here.
 """
 import base64
+import json
 import os
 import time
 
@@ -69,6 +70,11 @@ def on_message(message):
             raise ValueError("'photo' is not a JPEG")
         with open(path, "wb") as f:
             f.write(jpg)
+        if data.get("mode"):
+            # The placement situation the person picked (message 1's `mode`); replies.py
+            # reads it from here, so "detect" needs no new input.
+            with open(os.path.splitext(path)[0] + ".msg.json", "w") as f:
+                json.dump({"mode": str(data["mode"])}, f)
         state["last"] = {"path": path, "ref_cm": float(data["ref_cm"]), "ts": ts,
                          "kb": len(jpg) // 1024, "at": time.strftime("%H:%M:%S")}
         state.pop("error", None)

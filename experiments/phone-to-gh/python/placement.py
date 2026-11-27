@@ -190,6 +190,84 @@ def find_new_stone(layer, placed, H, mk1, zone_px, tap=None, stone_cm=30.0):
     return max(cnts, key=cv2.contourArea).reshape(-1, 2).astype(np.float64) / k, ""
 
 
+FIT_MIN_CHANGED = 0.3   # the fitted outline must lie at least this much on changed pixels
+
+
+def _ground_like(img):
+    """Pixels that look like the bare ground: below the Otsu threshold of the
+    distance to the photo border's colour, as the stone detection sees it
+    (stone_detect.ground_distance). (A spread taken from the border itself
+    took the stones for ground too: the border holds the paper and a grey
+    table, 2026-11-27.)"""
+    from stone_detect import ground_distance
+    gd = ground_distance(cv2.bilateralFilter(img, 9, 50, 50), 0.06, 0.5)
+    t, _ = cv2.threshold(gd, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    return gd <= t
+
+
+def fit_known_outline(layer, placed, H, mk1, outline_cm, zone_px, stone_cm=30.0):
+    """The checked stone's own outline (`outline_cm`, from its candidate photo:
+    the person lays the stone they checked last) put where it lies in the
+    placed photo: of all turns (every 5 degrees, also turned over) and shifts
+    near the zone, the one that covers the most of what changed since the
+    layer photo and the least bare ground. Its size is the stone's, not that
+    of what changed: when its texture and picture are not found, what changed
+    was only part of it (a grey stone on grey base stones; phone test
+    2026-11-27, a 4.5 x 2.1 cm stone came out 2.1 x 2.2). Returns (outline px
+    or None, info)."""
+    h, w = placed.shape[:2]
+    k = WORK_W / w
+    S = np.diag([k, k, 1.0])
+    size = (WORK_W, round(h * k))
+    small = cv2.resize(placed, size, interpolation=cv2.INTER_AREA)
+    warped = cv2.warpPerspective(layer, S @ H, size, flags=cv2.INTER_LINEAR)
+    valid = cv2.warpPerspective(np.full(layer.shape[:2], 255, np.uint8), S @ H, size, flags=cv2.INTER_NEAREST)
+    valid = cv2.erode(valid, np.ones((5, 5), np.uint8))
+    paper = cv2.resize(mk1.square_mask(placed.shape, margin_cm=1.0), size, interpolation=cv2.INTER_NEAREST)
+    valid[paper > 0] = 0
+    ch = changed_mask(warped, small, valid) > 0
+    ground = _ground_like(small) & (valid > 0)
+    F = ch.astype(np.float32) - 2.0 * ground.astype(np.float32)
+    # where the stone's middle may be: within a stone's size of the zone
+    near = np.zeros(size[::-1], np.uint8)
+    zone = np.float32(zone_px) * k
+    cv2.fillPoly(near, [np.int32(np.round(zone))], 255)
+    ppc = mk1.px_per_cm() * k
+    reach = max(3, int(round(0.5 * stone_cm * ppc)))
+    near = cv2.dilate(near, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2 * reach + 1, 2 * reach + 1)))
+    oc = np.float32(outline_cm)
+    oc = oc - oc.mean(axis=0)
+    mid_cm = mk1.to_cm(np.float32(zone_px)).mean(axis=0)
+    best = None
+    for flip in (1.0, -1.0):
+        for deg in range(0, 360, 5):
+            a = np.deg2rad(deg)
+            R = np.float32([[np.cos(a), -np.sin(a)], [np.sin(a), np.cos(a)]])
+            pts = mk1.to_px((oc * [flip, 1.0]) @ R.T + mid_cm) * k
+            lo = np.floor(pts.min(axis=0)).astype(int)
+            kw, kh = (np.ceil(pts.max(axis=0)).astype(int) - lo + 1)
+            kern = np.zeros((kh, kw), np.uint8)
+            cv2.fillPoly(kern, [np.int32(np.round(pts - lo))], 1)
+            area = float(kern.sum())
+            if area < 4:
+                continue
+            anchor = (kw // 2, kh // 2)
+            resp = cv2.filter2D(F, -1, kern.astype(np.float32), anchor=anchor, borderType=cv2.BORDER_CONSTANT)
+            resp[near == 0] = -1e9
+            y, x = np.unravel_index(int(np.argmax(resp)), resp.shape)
+            if best is None or resp[y, x] > best[0]:
+                best = (float(resp[y, x]), pts - lo - anchor + [x, y], kern, (x, y), anchor, area)
+    if best is None:
+        return None, "the checked stone's outline is empty"
+    _, pts, kern, (x, y), anchor, area = best
+    m = np.zeros(size[::-1], np.uint8)
+    cv2.fillPoly(m, [np.int32(np.round(pts))], 1)
+    on_changed = float((m.astype(bool) & ch).sum()) / max(float(m.sum()), 1.0)
+    if on_changed < FIT_MIN_CHANGED:
+        return None, "its outline does not fit what changed (%.0f %% on it)" % (100 * on_changed)
+    return pts / k, "its outline from the stone stock fitted to what changed (%.0f %% on it)" % (100 * on_changed)
+
+
 def tolerances(stone_cm):
     """(along, face, seen) in cm: the constants above for wall stones, smaller
     for small stones (the measurement's error shrinks with them: a 1.5 cm
@@ -244,6 +322,100 @@ def locate_known_stone(cand, cand_outline, placed, ppc_cand, ppc_placed, near=No
     return moved, "found by its own texture (%d points)" % int(inl.sum())
 
 
+MATCH_MIN = 0.45      # the whole-stone match must correlate at least this well
+
+
+def _rotate(img, angle, size, border):
+    """`img` turned by `angle` degrees about its middle, on a size x size canvas."""
+    h, w = img.shape[:2]
+    M = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1.0)
+    M[:, 2] += (size / 2 - w / 2, size / 2 - h / 2)
+    return cv2.warpAffine(img, M, (size, size), flags=cv2.INTER_LINEAR, borderValue=border), M
+
+
+def match_known_stone(cand, cand_outline, placed, ppc_cand, ppc_placed, near, radius_px, before=None,
+                      zone_px=None, zone_margin_px=0):
+    """The stone that fitted at the stone stock, found in the photo after
+    placing by its WHOLE top face: its picture from the candidate photo,
+    scaled to this photo's px per cm and turned in steps, slid over the area
+    around `near` (normalised correlation, only the stone's own pixels). Steadier
+    than texture points on a small stone (a 5 cm pebble gave SIFT 1-8 points,
+    phone test 2026-11-27). `before`: the layer photo lined up with this one;
+    a place that matches as well there is a base stone of the same rock, not
+    the new one (4 of 8 phone photos went to a base stone without this).
+    `zone_px`: the allowed zone in this photo; the stone's middle must lie in it
+    (+ zone_margin_px), as a laid stone overlaps it (2 of 8 went to bare paper).
+    Returns (outline px or None, info)."""
+    outline = np.float32(cand_outline).reshape(-1, 2)
+    x, y, w, h = cv2.boundingRect(np.int32(outline))
+    scale = ppc_placed / ppc_cand
+    g0 = cv2.GaussianBlur(_gray(cand), (0, 0), 1.0)
+    crop = g0[y:y + h, x:x + w]
+    m0 = np.zeros((h, w), np.uint8)
+    cv2.fillPoly(m0, [np.int32(outline - [x, y])], 255)
+    tw, th = max(4, round(w * scale)), max(4, round(h * scale))
+    tmpl = cv2.resize(crop, (tw, th), interpolation=cv2.INTER_AREA)
+    mask = cv2.erode(cv2.resize(m0, (tw, th), interpolation=cv2.INTER_NEAREST), np.ones((3, 3), np.uint8))
+    if mask.sum() < 255 * 50:
+        return None, "the stone is too small in the photo"
+    size = int(np.ceil(np.hypot(tw, th))) + 2
+    g1 = cv2.GaussianBlur(_gray(placed), (0, 0), 1.0)
+    H1, W1 = g1.shape
+    cx, cy = float(near[0]), float(near[1])
+    r = radius_px + size / 2
+    x0, y0 = int(max(0, cx - r)), int(max(0, cy - r))
+    x1, y1 = int(min(W1, cx + r)), int(min(H1, cy + r))
+    win = g1[y0:y1, x0:x1]
+    win0 = None
+    if before is not None:
+        win0 = cv2.GaussianBlur(_gray(before), (0, 0), 1.0)[y0:y1, x0:x1]
+    if win.shape[0] <= size or win.shape[1] <= size:
+        return None, "the zone is too near the photo's edge"
+    # where the template's middle may land: within radius_px of `near`
+    yy, xx = np.mgrid[0:win.shape[0] - size + 1, 0:win.shape[1] - size + 1]
+    allowed = (xx + x0 + size / 2 - cx) ** 2 + (yy + y0 + size / 2 - cy) ** 2 <= radius_px ** 2
+    if zone_px is not None:
+        zm = np.zeros(g1.shape, np.uint8)
+        cv2.fillPoly(zm, [np.int32(np.round(zone_px))], 255)
+        if zone_margin_px > 0:
+            k = int(2 * zone_margin_px) | 1
+            zm = cv2.dilate(zm, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k)))
+        cxs = np.clip((xx + x0 + size // 2).astype(int), 0, W1 - 1)
+        cys = np.clip((yy + y0 + size // 2).astype(int), 0, H1 - 1)
+        allowed &= zm[cys, cxs] > 0
+
+    def best_at(angle):
+        t, M = _rotate(tmpl, angle, size, 0)
+        m, _ = _rotate(mask, angle, size, 0)
+        m = np.uint8(m > 127) * 255
+        res = cv2.matchTemplate(win, t, cv2.TM_CCOEFF_NORMED, mask=m)
+        res = np.nan_to_num(res, nan=-1.0, posinf=-1.0, neginf=-1.0)
+        score = res.copy()
+        if win0 is not None:
+            # what was there before matching as well counts against it
+            res0 = np.nan_to_num(cv2.matchTemplate(win0, t, cv2.TM_CCOEFF_NORMED, mask=m), nan=0.0, posinf=0.0, neginf=0.0)
+            score = res - np.maximum(res0, 0)
+        score[~allowed] = -2
+        score[res < MATCH_MIN] = -2
+        i = int(np.argmax(score))
+        return float(score.flat[i]), divmod(i, res.shape[1]), M, float(res.flat[i])
+
+    best = max(((best_at(a), a) for a in range(0, 360, 10)), key=lambda t: t[0][0])
+    (score, loc, M, corr), angle = best
+    for a in np.arange(angle - 8, angle + 9, 2):
+        cand_best = best_at(float(a))
+        if cand_best[0] > score:
+            (score, loc, M, corr), angle = cand_best, float(a)
+    if score < (0.2 if win0 is not None else MATCH_MIN):
+        return None, "the stone's picture is not found (best %.2f)" % score
+    (ty, tx) = loc
+    pts = (outline - [x, y]) * scale                       # in the scaled crop
+    pts = pts @ M[:, :2].T + M[:, 2]                       # turned onto the canvas
+    pts = pts + [tx + x0, ty + y0]                         # where the canvas lies in the photo
+    return pts, "found by its whole picture (match %.2f, %.2f better than before placing, turned %d deg)" % (
+        corr, score, round(angle) % 360)
+
+
 def known_stone_at_tap(cand_outline_cm, along_cm, tap_cm, wall):
     """The checked stone's outline (cm, from the stone stock) put where the
     person tapped it, turned the way the fit check said it goes: the side that
@@ -274,6 +446,13 @@ def check(outline_cm, wall, stone_cm=30.0):
     # along: shifts that keep f <= cover <= 1-f on both base stones (with the tolerance)
     s_lo = max(J - c0 - (1 - f) * x - tol, J + f * y - tol - c1)
     s_hi = min(J - c0 - f * x + tol, J + (1 - f) * y + tol - c1)
+    if wall.get("start") is not None:
+        # Next to a laid stone (rule_of_thirds.compute_zone_next_to): its left end
+        # touches the laid stone's end `start` (within the tolerance), its right end
+        # covers f .. 1-f of C as above; x is what was left of B.
+        S = wall["start"]
+        s_lo = max(S - tol - c0, J + f * y - tol - c1)
+        s_hi = min(S + tol - c0, J + (1 - f) * y + tol - c1)
     # across: faces in line, or a deeper stone in the middle
     ft = face_tol + seen_tol
     if e1 - e0 <= d1 - d0 + 2 * face_tol:
@@ -316,6 +495,8 @@ def placement_message(placed, layer, mk1, mk0, layer_outlines, zone, photo_ts, l
     region0 = np.zeros(layer.shape[:2], np.uint8)
     for s in layer_outlines.get("stones", []):
         cv2.fillPoly(region0, [np.int32(s["outline"])], 255)
+    for o in layer_outlines.get("context", []):  # the second mode: D and the stones under it
+        cv2.fillPoly(region0, [np.int32(o)], 255)
     region0 = cv2.dilate(region0, np.ones((15, 15), np.uint8)) | mk0.square_mask(layer.shape)
     H, how = register(layer, placed, mk0, mk1, region0)
     if H is None:
@@ -332,10 +513,18 @@ def placement_message(placed, layer, mk1, mk0, layer_outlines, zone, photo_ts, l
     stone_cm = (zone.get("depth_range_cm") or [30.0])[0]
     outline, found_by = None, ""
     if cand is not None and cand_outline and mk_cand is not None:
-        near = tap if tap is not None else np.float32(msg["max"]).mean(axis=0)
-        radius = 2.5 * stone_cm * mk1.px_per_cm()
+        # Where to look: the tap if there is one (only a hint now), else the must zone's
+        # middle, where the stone has to lie anyway; small stones are hard to tap on a phone.
+        near = tap if tap is not None else np.float32(msg["min"]).mean(axis=0)
+        radius = (1.5 if tap is not None else 2.0) * stone_cm * mk1.px_per_cm()
         outline, found_by = locate_known_stone(cand, cand_outline, placed, mk_cand.px_per_cm(),
                                                mk1.px_per_cm(), near, radius)
+        if outline is None:
+            before = cv2.warpPerspective(layer, H, (w, h), flags=cv2.INTER_LINEAR)
+            outline, why = match_known_stone(cand, cand_outline, placed, mk_cand.px_per_cm(),
+                                             mk1.px_per_cm(), near, radius, before,
+                                             np.float32(msg["max"]), 0)
+            found_by = why if outline is not None else found_by + "; " + why
     if outline is None and tap is not None and cand_outline and mk_cand is not None:
         # The person tapped the new stone: its known outline there, along the wall.
         cm_known = known_stone_at_tap(mk_cand.to_cm(np.float32(cand_outline)), along_cm,
@@ -343,6 +532,13 @@ def placement_message(placed, layer, mk1, mk0, layer_outlines, zone, photo_ts, l
         outline = mk1.to_px(np.float32(cm_known))
         found_by = "its outline from the stone stock put at the tap, along the wall" + (
             " (%s)" % found_by if found_by else "")
+    if outline is None and cand_outline and mk_cand is not None:
+        # Its texture and picture are not found: its own outline, fitted to what changed.
+        outline, why = fit_known_outline(layer, placed, H, mk1, mk_cand.to_cm(np.float32(cand_outline)),
+                                         msg["max"], stone_cm)
+        found_by = why + ("; " + found_by if found_by else "")
+        if outline is None:
+            found_by = "not fitted: " + found_by
     if outline is None:
         outline, why = find_new_stone(layer, placed, H, mk1, msg["max"], tap, stone_cm)
         if outline is None:

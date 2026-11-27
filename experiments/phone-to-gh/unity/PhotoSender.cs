@@ -92,6 +92,20 @@ namespace Compas.GeoViewerXR
         private static readonly List<ARRaycastHit> Hits = new List<ARRaycastHit>();
 
         private bool _busy;
+
+        // The app opens on Start, then the person picks the placement situation on two picture
+        // cards (the group's mock-up "first & second interface", 2026-11-27). Both go on with the
+        // same flow from "Tap when in position"; the photo carries the mode (MESSAGES.md
+        // message 1) and Grasshopper makes the zone for it. Top card: the new stone on two
+        // supporting stones ("on_two"). Bottom card: next to the stone laid last on this course
+        // ("next_to", the group's rule L_E = r_B + a L_C, 1/4 <= a <= 3/4).
+        public const string OnTwo = "on_two", NextTo = "next_to";
+
+        /// <summary>The mode picked on the start cards, sent with each layer photo.</summary>
+        public string Mode { get; private set; } = OnTwo;
+
+        private enum Stage { Start, Question, Ready }
+        private Stage _stage = Stage.Start;
         private bool _configChosen;
         private string _status = "";
         private string _heightText = "";
@@ -228,6 +242,7 @@ namespace Compas.GeoViewerXR
                 { "photo", Convert.ToBase64String(jpg) },
                 { "ref_cm", refCm },
                 { "ts", ts },
+                { "mode", Mode },
             });
 
             _status = "Sending...";
@@ -491,6 +506,11 @@ namespace Compas.GeoViewerXR
         private void OnGUI()
         {
             if (!showButton) return;
+            if (_stage != Stage.Ready)
+            {
+                StartGUI();
+                return;
+            }
 
             // Look: AlpineUI.cs. Status and height on small pills above one blue pill button.
             float h = AlpineUI.ButtonHeight;
@@ -507,6 +527,123 @@ namespace Compas.GeoViewerXR
             if (AlpineUI.Button(buttonRect, _busy ? "Sending…" : "Tap when in position", true, !_busy))
             {
                 TakeAndSend();
+            }
+        }
+
+        /// <summary>Start, then the two mode cards.</summary>
+        private void StartGUI()
+        {
+            float h = AlpineUI.ButtonHeight;
+            float w = Screen.width * 0.78f;
+            var single = new Rect((Screen.width - w) / 2f, Screen.height * 0.72f, w, h);
+
+            switch (_stage)
+            {
+                case Stage.Start:
+                    if (AlpineUI.Button(single, "Start", true)) _stage = Stage.Question;
+                    break;
+                case Stage.Question:
+                    ModeGUI();
+                    break;
+            }
+        }
+
+        // The mode cards as in the mock-up: grey stones already laid, the new one cyan with a
+        // dashed edge. Rects as shares of the card (mock-up card 253 x 143).
+        private const string ModeQuestion = "Where does the new stone go?";
+        private static readonly Color ModeCard = new Color32(94, 87, 83, 235);
+        private static readonly Color ModeCardPressed = new Color32(122, 114, 109, 245);
+        private static readonly Color StoneGrey = new Color32(192, 192, 192, 255);
+        private static readonly Color StoneNew = new Color32(0, 255, 255, 255);
+        private static readonly Rect[] OnTwoLaid = { R(54, 75), R(129, 75) };
+        private static readonly Rect[] OnTwoNew = { R(91.5f, 50) };
+        private static readonly Rect[] NextToLaid = { R(54, 47), R(16, 73), R(91, 73), R(166, 73) };
+        private static readonly Rect[] NextToNew = { R(129, 47) };
+
+        private static Rect R(float x, float y) => new Rect(x / 253f, y / 143f, 71f / 253f, 21f / 143f);
+
+        /// <summary>The question at the top and the two picture cards; a tap on a card picks its mode.</summary>
+        private void ModeGUI()
+        {
+            float h = AlpineUI.ButtonHeight;
+            float cw = Screen.width * 0.9f, ch = cw * 143f / 253f, gap = cw * 0.08f;
+            var bottom = new Rect(Screen.width * 0.05f, Screen.height * 0.93f - ch, cw, ch);
+            var top = new Rect(bottom.x, bottom.y - gap - ch, cw, ch);
+            // Just above the cards: the course scene's round buttons on the right reach down to
+            // about a quarter of the screen (phone test 2026-11-27), the cards start below 0.4.
+            AlpineUI.Card(new Rect(top.x, top.y - gap * 0.6f - h * 1.1f, cw, h * 1.1f), ModeQuestion);
+            if (ModeCardButton(0, top, OnTwoLaid, OnTwoNew, "On two stones")) Pick(OnTwo);
+            if (ModeCardButton(1, bottom, NextToLaid, NextToNew, "Next to a laid stone")) Pick(NextTo);
+        }
+
+        /// <summary>Show the two mode cards again (after "Next stone").</summary>
+        public void ChooseMode() => _stage = Stage.Question;
+
+        private void Pick(string mode)
+        {
+            Mode = mode;
+            _stage = Stage.Ready;
+        }
+
+        private int _pressedCard = -1;
+
+        /// <summary>One picture card; true when a touch that began on it ends on it. Press state
+        /// from the GUI's own events: the project uses the new Input System only, where
+        /// UnityEngine.Input throws (phone test 2026-11-27: the second card was never drawn).</summary>
+        private bool ModeCardButton(int index, Rect card, Rect[] laid, Rect[] fresh, string caption)
+        {
+            Event e = Event.current;
+            bool picked = false;
+            if (e.type == EventType.MouseDown && card.Contains(e.mousePosition))
+            {
+                _pressedCard = index;
+                e.Use();
+            }
+            else if (e.type == EventType.MouseUp && _pressedCard == index)
+            {
+                _pressedCard = -1;
+                picked = card.Contains(e.mousePosition);
+                e.Use();
+            }
+            AlpineUI.Fill(card, _pressedCard == index ? ModeCardPressed : ModeCard, card.height * 0.14f);
+            float edge = Mathf.Max(2f, Mathf.Round(card.width * 0.005f));
+            foreach (Rect r in laid) DrawStone(In(card, r), StoneGrey, edge, false);
+            foreach (Rect r in fresh) DrawStone(In(card, r), StoneNew, edge, true);
+            float th = AlpineUI.ButtonHeight * 0.26f;
+            AlpineUI.Text(new Rect(card.x, card.y + card.height * 0.74f, card.width, card.height * 0.16f),
+                          caption, th, new Color(1, 1, 1, 0.9f), TextAnchor.MiddleCenter, true);
+            return picked;
+        }
+
+        private static Rect In(Rect card, Rect share) =>
+            new Rect(card.x + share.x * card.width, card.y + share.y * card.height,
+                     share.width * card.width, share.height * card.height);
+
+        /// <summary>A stone: filled, with a white edge (dashed for the new stone).</summary>
+        private static void DrawStone(Rect r, Color fill, float edge, bool dashed)
+        {
+            AlpineUI.Line(r, fill);
+            Color white = Color.white;
+            if (!dashed)
+            {
+                AlpineUI.Line(new Rect(r.x, r.y, r.width, edge), white);
+                AlpineUI.Line(new Rect(r.x, r.yMax - edge, r.width, edge), white);
+                AlpineUI.Line(new Rect(r.x, r.y, edge, r.height), white);
+                AlpineUI.Line(new Rect(r.xMax - edge, r.y, edge, r.height), white);
+                return;
+            }
+            float dash = edge * 3f;
+            for (float x = r.x; x < r.xMax; x += dash * 2)
+            {
+                float w = Mathf.Min(dash, r.xMax - x);
+                AlpineUI.Line(new Rect(x, r.y, w, edge), white);
+                AlpineUI.Line(new Rect(x, r.yMax - edge, w, edge), white);
+            }
+            for (float y = r.y; y < r.yMax; y += dash * 2)
+            {
+                float hh = Mathf.Min(dash, r.yMax - y);
+                AlpineUI.Line(new Rect(r.x, y, edge, hh), white);
+                AlpineUI.Line(new Rect(r.xMax - edge, y, edge, hh), white);
             }
         }
     }

@@ -66,6 +66,12 @@ namespace Compas.GeoViewerXR
         [Tooltip("Hide the course template's dotted AR planes and its cube button at the bottom. Untick to get them back.")]
         public bool hideCourseExtras = true;
 
+        [Tooltip("Preview and the placement check: draw the outlines and the zone in AR on the tracked QR marker, so they stay on the stones while the phone moves. Untick for the old lines fixed to the screen.")]
+        public bool pinToMarker = true;
+
+        [Tooltip("Width of the pinned lines: 1 = automatic (about 1 % of the zone, at least 1.6 mm); 0.5 = half as thick, 2 = twice.")]
+        public float pinnedLineScale = 1f;
+
         [SerializeField] private PhotoSender sender;
 
         // Zone: the size is shown (or the zone did not come); from here stones can be tapped.
@@ -86,6 +92,25 @@ namespace Compas.GeoViewerXR
         private bool _sendingPlaced;
         private string _placementResult;
         private const string TapNewStone = "Tap the new stone on the screen to check it";
+        private const string ShowMarker = "Show the QR marker to the camera to pin the lines. ";
+        private QRAnchoredOverlay _pinned;
+
+        // On the placement screens a drag moves the pinned lines (fine alignment); a tap only
+        // checks the placement after "Check placement" / "Check again" asked for it.
+        private bool _awaitTap;
+        private bool _touching, _dragging;
+        private Vector2 _touchStart, _touchLast;
+        private const float DragPx = 18f;
+        // The drag is not obvious: a hint in the middle of the screen until the first drag
+        // (then it stays away until the app restarts).
+        private bool _hasDragged;
+        private const string DragHint = "Drag to align the lines with your stones";
+
+        // The same outlines and zone in cm of the marker's frame (null without the marker in the
+        // layer photo): drawn on the tracked marker. The marker does not move while building, so
+        // they stay valid for the placement check too.
+        private readonly List<JArray> _stoneOutlinesCm = new List<JArray>();
+        private JArray _zoneMaxCm, _zoneMinCm;
         private AudioClip _zoneSound, _fitsSound;
         private Texture2D _overlay;  // photo-sized, transparent except the lines
         private Color32[] _pixels;
@@ -120,6 +145,7 @@ namespace Compas.GeoViewerXR
             _fitsSound = MakeTones("Fits", 0.12f, 784f, 988f, 1319f);  // rising: the jingle
 
             gameObject.AddComponent<CourseExtras>().hide = hideCourseExtras;
+            if (pinToMarker) _pinned = gameObject.AddComponent<QRAnchoredOverlay>();
         }
 
         private void OnEnable()
@@ -180,6 +206,11 @@ namespace Compas.GeoViewerXR
             _hasZone = false;
             _stoneOutlines.Clear();
             _zoneMax = _zoneMin = null;
+            _stoneOutlinesCm.Clear();
+            _zoneMaxCm = _zoneMinCm = null;
+            _pinned?.Clear();
+            _pinned?.ResetOffset();   // a new layer photo: no hand adjustment yet
+            _awaitTap = false;
             _needLength = _needDepth = null;
             _fitResult = null;
             _state = State.Waiting;
@@ -200,11 +231,13 @@ namespace Compas.GeoViewerXR
                 _pixels = new Color32[_photoW * _photoH];  // all transparent
                 _stoneScale = ScaleOf(msg);
                 _stoneOutlines.Clear();
+                _stoneOutlinesCm.Clear();
                 foreach (JToken stone in msg["stones"] ?? new JArray())
                 {
                     if (stone["outline"] is JArray outline && DrawOutline(outline, _stoneScale, outlineColor, outlineWidth))
                     {
                         _stoneOutlines.Add(outline);
+                        if (stone["outline_cm"] is JArray cm) _stoneOutlinesCm.Add(cm);
                     }
                 }
 
@@ -239,6 +272,8 @@ namespace Compas.GeoViewerXR
                 {
                     _zoneMax = msg["max"] as JArray;
                     _zoneMin = msg["min"] as JArray;
+                    _zoneMaxCm = msg["max_cm"] as JArray;
+                    _zoneMinCm = msg["min_cm"] as JArray;
                     _zoneScale = ScaleOf(msg);
                     _needLength = RangeOf(msg["length_cm"]);
                     _needDepth = RangeOf(msg["depth_range_cm"]);
@@ -394,6 +429,7 @@ namespace Compas.GeoViewerXR
             DrawOutline(_zoneMax, _zoneScale, maxColor, boxWidth);   // allowed zone: a contour
             DrawHatch(_zoneMin, _zoneScale, minColor);                // must zone: a hatch
             ShowOverlay();
+            PinLayer();
             _messageBeforePlacement = _message;
             _message = "Align the red outlines with your stones, then place the new stone so it covers the hatched area without crossing the white outline.";
             _state = State.Placement;
@@ -480,6 +516,21 @@ namespace Compas.GeoViewerXR
                 DrawOutline(msg["outline"] as JArray, scale, ok ? candidateColor : arrowColor, outlineWidth);
                 if (msg["arrow"] is JArray arrow && arrow.Count == 2) DrawArrow(arrow, scale, arrowColor);
                 ShowOverlay();
+                PinLayer();
+                if (_pinned != null && msg["outline_cm"] is JArray stoneCm && stoneCm.Count > 2)
+                {
+                    List<Vector2> pts = ToVectors(stoneCm);
+                    float w = LineCm();
+                    _pinned.AddLine(pts, ok ? candidateColor : arrowColor, w, true);
+                    if (msg["move_cm"] is JArray mv && mv.Count == 2 && !ok)
+                    {
+                        Vector2 mid = Vector2.zero;
+                        foreach (Vector2 q in pts) mid += q;
+                        mid /= pts.Count;
+                        var move = new Vector2((float)mv[0], (float)mv[1]);
+                        if (move.sqrMagnitude > 1e-4f) _pinned.AddArrow(mid, mid + move, arrowColor, w * 1.5f);
+                    }
+                }
 
                 switch (result)
                 {
@@ -513,8 +564,53 @@ namespace Compas.GeoViewerXR
         private void HidePlacement()
         {
             ClearOverlay();
+            _pinned?.Clear();
+            _awaitTap = false;
             _message = _messageBeforePlacement;
             _state = State.Zone;
+        }
+
+        /// <summary>The layer's outlines (red) and the zone (white contour, hatched must zone) on
+        /// the tracked marker. Nothing without cm (no marker in the layer photo).</summary>
+        private void PinLayer()
+        {
+            if (_pinned == null) return;
+            _pinned.Clear();
+            if (_zoneMaxCm == null || _zoneMinCm == null) return;
+            // The outlines are the stones' tops: draw them that high. Their height is not seen
+            // from above; about 0.4 x their depth (test pebbles ~2 cm, wall stones ~12 cm).
+            if (_needDepth != null) _pinned.liftCm = Mathf.Clamp((float)_needDepth[0] * 0.4f, 0.3f, 20f);
+            float w = LineCm();
+            foreach (JArray cm in _stoneOutlinesCm) _pinned.AddLine(ToVectors(cm), outlineColor, w, true);
+            _pinned.AddLine(ToVectors(_zoneMaxCm), maxColor, w * 0.7f, true);
+            List<Vector2> min = ToVectors(_zoneMinCm);
+            _pinned.AddHatch(min, minColor, w * 0.7f, ZoneSizeCm() / 14f);
+        }
+
+        /// <summary>Line width in cm: about 1 % of the zone, at least 1.6 mm: on the test pebbles
+        /// thin enough to see the stone (2.5 mm was too heavy) and thick enough for others to see
+        /// the hatch (chosen from a simulation, 2026-11-27). <see cref="pinnedLineScale"/> makes
+        /// them all thinner or thicker.</summary>
+        private float LineCm() => Mathf.Clamp(ZoneSizeCm() * 0.01f, 0.16f, 1.2f) * pinnedLineScale;
+
+        private float ZoneSizeCm()
+        {
+            if (_zoneMaxCm == null) return 30f;
+            List<Vector2> pts = ToVectors(_zoneMaxCm);
+            Vector2 lo = pts[0], hi = pts[0];
+            foreach (Vector2 p in pts)
+            {
+                lo = Vector2.Min(lo, p);
+                hi = Vector2.Max(hi, p);
+            }
+            return Mathf.Max(hi.x - lo.x, hi.y - lo.y, 1f);
+        }
+
+        private static List<Vector2> ToVectors(JArray points)
+        {
+            var list = new List<Vector2>(points.Count);
+            foreach (JToken p in points) list.Add(new Vector2((float)p[0], (float)p[1]));
+            return list;
         }
 
         private bool IsForThisPhoto(JObject msg)
@@ -706,6 +802,7 @@ namespace Compas.GeoViewerXR
         private void BackToStart(string status)
         {
             ClearOverlay();
+            _pinned?.Clear();
             _state = State.Off;
             _message = "";
             sender.ShowStatus(status);
@@ -858,7 +955,9 @@ namespace Compas.GeoViewerXR
 
             float buttonH = AlpineUI.ButtonHeight;  // look: AlpineUI.cs
 
-            if (_overlay != null)
+            bool pinnedShowing = _pinned != null && _pinned.Showing
+                && (_state == State.Placement || _state == State.WaitingPlacement || _state == State.Placed);
+            if (_overlay != null && !pinnedShowing)
             {
                 // The AR view shows the camera image turned and scaled to fill the whole
                 // screen (cut off at the sides). Place the lines the same way.
@@ -928,15 +1027,45 @@ namespace Compas.GeoViewerXR
                 case State.WaitingPlacement:
                 case State.Placed:
                 {
-                    Rect placeCard = AlpineUI.Card(labelRect, _message);
-                    bool idle = _state != State.WaitingPlacement && !_sendingPlaced;
-                    // "Check placement" is also a tap on the laid stone (above the text card, below
-                    // the status line at the top): that tap is sent with the photo.
-                    Event ev = Event.current;
-                    if (idle && ev.type == EventType.MouseDown && ev.mousePosition.y < placeCard.y
-                        && ev.mousePosition.y > Screen.height * 0.08f)
+                    bool hint = _pinned != null && !_pinned.Showing && _zoneMaxCm != null && _state == State.Placement;
+                    if (_pinned != null && _pinned.Showing && !_hasDragged && _state != State.WaitingPlacement)
                     {
-                        CheckPlacement(ev.mousePosition);
+                        AlpineUI.Chip(new Rect(Screen.width * 0.05f, Screen.height * 0.45f, Screen.width * 0.9f, buttonH * 0.7f), DragHint);
+                    }
+                    Rect placeCard = AlpineUI.Card(labelRect, hint ? ShowMarker + _message : _message);
+                    bool idle = _state != State.WaitingPlacement && !_sendingPlaced;
+                    // Above the text card: a drag moves the pinned lines onto the stones; after
+                    // "Check placement" a tap on the laid stone takes the photo and is sent with it.
+                    Event ev = Event.current;
+                    bool inView = ev.mousePosition.y < placeCard.y && ev.mousePosition.y > Screen.height * 0.08f;
+                    if (idle && inView && ev.type == EventType.MouseDown)
+                    {
+                        _touching = true;
+                        _dragging = false;
+                        _touchStart = _touchLast = ev.mousePosition;
+                        ev.Use();
+                    }
+                    else if (_touching && ev.type == EventType.MouseDrag)
+                    {
+                        if (!_dragging && (ev.mousePosition - _touchStart).magnitude > DragPx) _dragging = true;
+                        if (_dragging && _pinned != null && _pinned.Showing)
+                        {
+                            _hasDragged = true;
+                            // GUI points (y down) -> screen points (y up) for the camera's rays.
+                            _pinned.Nudge(new Vector2(_touchLast.x, Screen.height - _touchLast.y),
+                                          new Vector2(ev.mousePosition.x, Screen.height - ev.mousePosition.y));
+                        }
+                        _touchLast = ev.mousePosition;
+                        ev.Use();
+                    }
+                    else if (_touching && ev.type == EventType.MouseUp)
+                    {
+                        _touching = false;
+                        if (!_dragging && idle && _awaitTap)
+                        {
+                            _awaitTap = false;
+                            CheckPlacement(_touchStart);
+                        }
                         ev.Use();
                     }
                     // The buttons ask for the tap: the tap tells where the new stone lies, and its
@@ -944,14 +1073,21 @@ namespace Compas.GeoViewerXR
                     if (_state == State.Placement)
                     {
                         if (AlpineUI.Button(leftButton, "Back", false, idle)) HidePlacement();
-                        if (AlpineUI.Button(rightButton, "Check placement", true, idle)) _message = TapNewStone;
+                        // No tap on the stone any more: small stones are hard to hit on the screen,
+                        // and Grasshopper finds the stone that fitted by its picture near the zone
+                        // (2026-11-27). A drag still aligns the lines.
+                        if (AlpineUI.Button(rightButton, "Check placement", true, idle)) CheckPlacement(null);
                     }
                     else
                     {
                         bool placedOk = _placementResult == "ok";
-                        if (AlpineUI.Button(leftButton, "Check again", !placedOk, idle)) _message = TapNewStone;
+                        if (AlpineUI.Button(leftButton, "Check again", !placedOk, idle)) CheckPlacement(null);
                         // The next round starts with a new photo of the layer.
-                        if (AlpineUI.Button(rightButton, "Next stone", placedOk, idle)) BackToStart("");
+                        if (AlpineUI.Button(rightButton, "Next stone", placedOk, idle))
+                        {
+                            sender.ChooseMode();   // the next one usually goes next to this one
+                            BackToStart("");
+                        }
                     }
                     break;
                 }

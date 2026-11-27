@@ -39,7 +39,8 @@ When: the person taps "Tap when in position" (flow steps 1–2).
 {
   "photo": "<JPEG, base64>",
   "ref_cm": 45,
-  "ts": 1763200000.0
+  "ts": 1763200000.0,
+  "mode": "on_two"
 }
 ```
 
@@ -48,6 +49,7 @@ When: the person taps "Tap when in position" (flow steps 1–2).
 | `photo` | string | the top-view photo, JPEG, base64-encoded. Long side about 1280 px is plenty (detection works at 640 px); a full 4032 px photo also works, it is only slower to send |
 | `ref_cm` | number | the real length (long side) of the biggest stone in the photo, in cm. Only used when there is no QR marker in the photo (then it gives the scale) |
 | `ts` | number | time of the photo, seconds since 1970 (Unix time) |
+| `mode` | string, optional | added 2026-11-27, the card picked after Start. `"on_two"` (or missing): the new stone goes on two base stones, the quarter rule. `"next_to"`: it goes next to the stone laid last on this course (see message 4). Grasshopper keeps it next to the photo as `photo_<time>.msg.json` |
 
 Status: tested end to end on 2026-11-16 (phone → Grasshopper curves, PASS).
 Grasshopper side built and tested with `python/fake_phone.py`.
@@ -152,9 +154,30 @@ the gap) its length z is `x/4 + y/4 <= z <= 3x/4 + 3y/4`.
 | `length_cm` | [number, number] or null | added 2026-11-18. How long the next stone must be, along the wall, in cm: [shortest, longest] = the width of `min` and of `max`. Step 9 checks the candidate stone against this |
 | `depth_cm` | number or null | added 2026-11-18. How deep (across the wall) the drawn boxes are, in cm: the depth both stones share near the joint |
 | `depth_range_cm` | [number, number] or null | added 2026-11-23. How deep the next stone must be, in cm: the average depth of the two supporting stones +- 10 % (each stone's depth = the side of its smallest enclosing rectangle that runs across the wall). Step 9 checks the candidate against this too |
-| `wall_cm` | object or null | added 2026-11-24. The wall's own frame in cm, for the check after placing (message 8): `origin`, `u` (along the wall), `n` (across it), `joint` (the joint line, along u), `x`, `y` (how far each base stone reaches from the joint), `depth` ([lo, hi] across: where the new stone rests), `fraction` (1/4). A point p lies at `(p - origin) . u` along and `(p - origin) . n` across. `null` without a marker. The phone does not need it |
+| `wall_cm` | object or null | added 2026-11-24. The wall's own frame in cm, for the check after placing (message 8): `origin`, `u` (along the wall), `n` (across it), `joint` (the joint line, along u), `x`, `y` (how far each base stone reaches from the joint), `depth` ([lo, hi] across: where the new stone rests), `fraction` (1/4). In the second mode also `start` (the laid stone's end, along u) and `rule` `"next_to"`, and `x` is what is left of B from `start` to the joint (r_B). A point p lies at `(p - origin) . u` along and `(p - origin) . n` across. `null` without a marker. The phone does not need it |
 | `note` | string | empty when there is a zone; otherwise why not (e.g. `need two base stones, found 1`), and `max` / `min` are empty |
+| `mode`, `laid` | string | only in the second mode: `"next_to"`, and how the laid stone was found |
 | `ts` | number | time sent |
+
+**Second mode, next to a laid stone** (added 2026-11-27, the group's rule).
+On this course a stone D is laid already, on A and B. The new stone E goes
+next to it, at the end of D that has a free base stone C beyond it (both
+ends are looked at; if both have one, the nearer C). E touches D,
+covers the rest of B (r_B, from D's end to the joint) and 1/4 to 3/4 of
+the next base stone C: `L_E = r_B + a L_C`, `1/4 <= a <= 3/4`. So `min` =
+from D's end to J + L_C/4 and `max` = from D's end to J + 3 L_C/4; the
+depth rule is mode 1's (B's part right of D and C, +- 10 %). D is the stone
+of the last placement check in the same folder (message 8), found again in
+this photo by its texture or picture. Without one, `note` says so: D is not
+taken from the photo alone (from above D, A and B are one outline, and
+splitting them went wrong). Message 2 then holds only C in `stones` (the
+group: show just the new stone), and D and the stones under it in an extra
+`context` (outlines in pixels), which the phone ignores and the placement
+check uses to line the photos up. No zone: `stones` as found, no `context`.
+If the usual detection gives no C (a shadow bridging a gap of a few mm made
+C and A one outline), it runs once more with a tighter ground threshold.
+Message 8 checks E against it: its end within the along tolerance of D's
+end, 1/4 to 3/4 of C (`placement.check`).
 
 Pixels, like message 2, because the phone draws the zone over the same
 view as the outlines (2D). With a marker in the photo the rule is
@@ -312,7 +335,12 @@ stone that fitted at the stone stock (the last message 6 for this layer with
 `fits`), so its outline and texture are known. 1. Its texture is matched near
 the tap: its known outline is carried over exactly. 2. Else (laid another face
 up), its known outline is put at the tap, turned the way the fit check said
-it goes along the wall. 3. Else (no tap), it is what **changed** since the
+it goes along the wall. 3. Else (no tap, added 2026-11-27), its known outline
+is fitted to what changed: of all turns (also turned over) and shifts near
+the zone, the one that covers the most changed pixels and the least bare
+ground; so it keeps the checked stone's size (a small grey stone on grey base
+stones changed only in part, and came out half its size). 4. Else (no stone
+checked at the stock), it is what **changed** since the
 layer photo (lined up by the stones' texture; a shadow does not count). So the
 phone asks for a tap on the new stone. It is
 right when, along the wall, it covers 1/4 to 3/4 of each base stone from the

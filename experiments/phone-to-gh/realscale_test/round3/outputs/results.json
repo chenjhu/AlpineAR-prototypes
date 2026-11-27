@@ -51,7 +51,7 @@
     ],
     "note": "",
     "iou": 0.9339769098834647,
-    "seconds": 1.1341161727905273
+    "seconds": 0.7550463676452637
    },
    {
     "photo": "s1_cand2.jpg",
@@ -68,7 +68,7 @@
     ],
     "note": "",
     "iou": 0.9931912006817073,
-    "seconds": 1.192305326461792
+    "seconds": 0.8105950355529785
    },
    {
     "photo": "s1_cand3.jpg",
@@ -85,7 +85,7 @@
     ],
     "note": "",
     "iou": 0.9655114214737419,
-    "seconds": 1.1742727756500244
+    "seconds": 0.7818849086761475
    },
    {
     "photo": "s1_cand4.jpg",
@@ -102,7 +102,7 @@
     ],
     "note": "",
     "iou": 0.9737042128916228,
-    "seconds": 1.3529925346374512
+    "seconds": 0.7577362060546875
    }
   ],
   "placed": [
@@ -125,7 +125,7 @@
     "arrow_off_deg": 1.1832213712034423,
     "iou": 0.9228542818342684,
     "note": "found by its own texture (934 points); lined up by texture (529 points)",
-    "seconds": 1.8485214710235596
+    "seconds": 1.053208589553833
    },
    {
     "photo": "s1_placed2.jpg",
@@ -145,8 +145,8 @@
     ],
     "arrow_off_deg": 1.9649790591003204,
     "iou": 0.9328329886686649,
-    "note": "found by its own texture (1238 points); lined up by texture (366 points)",
-    "seconds": 1.833421230316162
+    "note": "found by its own texture (1240 points); lined up by texture (366 points)",
+    "seconds": 1.035520315170288
    },
    {
     "photo": "s1_placed3.jpg",
@@ -167,7 +167,7 @@
     "arrow_off_deg": 1.422551891095496,
     "iou": 0.9322573109058927,
     "note": "found by its own texture (1035 points); lined up by texture (685 points)",
-    "seconds": 1.771913766860962
+    "seconds": 1.056919813156128
    },
    {
     "photo": "s1_placed4.jpg",
@@ -188,7 +188,7 @@
     "arrow_off_deg": 0.9130028747719445,
     "iou": 0.9326827654647701,
     "note": "found by its own texture (1093 points); lined up by texture (570 points), marker from the layer photo",
-    "seconds": 1.7104153633117676
+    "seconds": 1.102891206741333
    }
   ]
  },
@@ -244,7 +244,7 @@
     ],
     "note": "",
     "iou": 0.9901423353927024,
-    "seconds": 1.3845908641815186
+    "seconds": 0.713937520980835
    },
    {
     "photo": "s2_cand2.jpg",
@@ -261,7 +261,7 @@
     ],
     "note": "",
     "iou": 0.8653400402692922,
-    "seconds": 1.0915794372558594
+    "seconds": 0.7460906505584717
    },
    {
     "photo": "s2_cand3.jpg",
@@ -278,7 +278,7 @@
     ],
     "note": "",
     "iou": 0.9803634516359941,
-    "seconds": 1.0645983219146729
+    "seconds": 0.7453916072845459
    },
    {
     "photo": "s2_cand4.jpg",
@@ -295,7 +295,7 @@
     ],
     "note": "",
     "iou": 0.727926827451623,
-    "seconds": 1.1249499320983887
+    "seconds": 0.7503149509429932
    }
   ],
   "placed": [
@@ -318,7 +318,7 @@
     "arrow_off_deg": null,
     "iou": 0.9855309997807727,
     "note": "found by its own texture (864 points); lined up by texture (709 points)",
-    "seconds": 1.7544195652008057
+    "seconds": 1.1567366123199463
    },
    {
     "photo": "s2_placed2.jpg",
@@ -337,9 +337,9 @@
      0.0
     ],
     "arrow_off_deg": 3.1685966376489967,
-    "iou": 0.9765451041296335,
-    "note": "found by its own texture (707 points); lined up by texture (926 points)",
-    "seconds": 1.7677092552185059
+    "iou": 0.9749154189797941,
+    "note": "found by its own texture (631 points); lined up by texture (926 points)",
+    "seconds": 1.0947747230529785
    },
    {
     "photo": "s2_placed3.jpg",
@@ -360,7 +360,7 @@
     "arrow_off_deg": 0.012538434218553753,
     "iou": 0.979763692147007,
     "note": "found by its own texture (879 points); lined up by texture (897 points)",
-    "seconds": 1.7921338081359863
+    "seconds": 1.1317203044891357
    },
    {
     "photo": "s2_placed4.jpg",
@@ -381,7 +381,7 @@
     "arrow_off_deg": null,
     "iou": 0.9858502050830633,
     "note": "found by its own texture (881 points); lined up by texture (686 points)",
-    "seconds": 1.836876392364502
+    "seconds": 1.0815136432647705
    }
   ]
  },
@@ -437,7 +437,7 @@
     ],
     "note": "",
     "iou": 0.9592579546788775,
-    "seconds": 1.181751012802124
+    "seconds": 0.7716329097747803
    },
    {
     "photo": "s3_cand2.jpg",
@@ -454,7 +454,7 @@
     ],
     "note": "",
     "iou": 0.9942358498118645,
-    "seconds": 0.984771728515625
+    "seconds": 0.7368662357330322
    },
    {
     "photo": "s3_cand3.jpg",
@@ -471,7 +471,7 @@
     ],
     "note": "",
     "iou": 0.9744734934716253,
-    "seconds": 0.9572358131408691
+    "seconds": 0.7233612537384033
    },
    {
     "photo": "s3_cand4.jpg",
@@ -488,7 +488,7 @@
     ],
     "note": "",
     "iou": 0.952233011269553,
-    "seconds": 1.000133991241455
+    "seconds": 0.7416703701019287
    }
   ],
   "placed": [
@@ -509,9 +509,9 @@
      0.0
     ],
     "arrow_off_deg": null,
-    "iou": 0.9493724796039235,
-    "note": "found by its own texture (842 points); lined up by texture (449 points), marker from the layer photo",
-    "seconds": 1.9305870532989502
+    "iou": 0.9483993821242144,
+    "note": "found by its own texture (804 points); lined up by texture (449 points), marker from the layer photo",
+    "seconds": 1.243187427520752
    },
    {
     "photo": "s3_placed2.jpg",
@@ -531,8 +531,8 @@
     ],
     "arrow_off_deg": 10.073783769176309,
     "iou": 0.9509047233238099,
-    "note": "found by its own texture (723 points); lined up by texture (413 points), marker from the layer photo",
-    "seconds": 1.958672285079956
+    "note": "found by its own texture (726 points); lined up by texture (413 points), marker from the layer photo",
+    "seconds": 1.2704119682312012
    },
    {
     "photo": "s3_placed3.jpg",
@@ -553,7 +553,7 @@
     "arrow_off_deg": 3.7367796218598546,
     "iou": 0.9494030446939772,
     "note": "found by its own texture (706 points); lined up by texture (470 points), marker from the layer photo",
-    "seconds": 1.9289579391479492
+    "seconds": 1.3055498600006104
    },
    {
     "photo": "s3_placed4.jpg",
@@ -574,7 +574,7 @@
     "arrow_off_deg": 177.73268616812015,
     "iou": 0.9535657667033751,
     "note": "found by its own texture (712 points); lined up by texture (395 points)",
-    "seconds": 1.8620643615722656
+    "seconds": 1.1687662601470947
    }
   ]
  },
@@ -630,7 +630,7 @@
     ],
     "note": "",
     "iou": 0.9930169266511782,
-    "seconds": 1.1068739891052246
+    "seconds": 0.749988317489624
    },
    {
     "photo": "s4_cand2.jpg",
@@ -647,7 +647,7 @@
     ],
     "note": "",
     "iou": 0.9616039952996475,
-    "seconds": 1.1043674945831299
+    "seconds": 0.7932500839233398
    },
    {
     "photo": "s4_cand3.jpg",
@@ -664,7 +664,7 @@
     ],
     "note": "",
     "iou": 0.9567436256599634,
-    "seconds": 1.0075149536132812
+    "seconds": 0.7344868183135986
    },
    {
     "photo": "s4_cand4.jpg",
@@ -681,7 +681,7 @@
     ],
     "note": "",
     "iou": 0.6877410692952148,
-    "seconds": 1.060943365097046
+    "seconds": 0.7450461387634277
    }
   ],
   "placed": [
@@ -704,7 +704,7 @@
     "arrow_off_deg": null,
     "iou": 0.9913978818602269,
     "note": "found by its own texture (592 points); lined up by texture (857 points)",
-    "seconds": 1.831040382385254
+    "seconds": 1.0678942203521729
    },
    {
     "photo": "s4_placed2.jpg",
@@ -719,13 +719,13 @@
      0.0
     ],
     "sys_move_cm": [
-     -13.9,
+     -13.8,
      0.0
     ],
     "arrow_off_deg": 2.3137800209121964,
-    "iou": 0.9694334028625028,
-    "note": "found by its own texture (502 points); lined up by texture (635 points)",
-    "seconds": 1.8347525596618652
+    "iou": 0.965588598945793,
+    "note": "found by its own texture (452 points); lined up by texture (635 points)",
+    "seconds": 1.0986475944519043
    },
    {
     "photo": "s4_placed3.jpg",
@@ -746,7 +746,7 @@
     "arrow_off_deg": 0.4468766204175492,
     "iou": 0.9857045501370905,
     "note": "found by its own texture (489 points); lined up by texture (883 points)",
-    "seconds": 1.1542332172393799
+    "seconds": 1.1240787506103516
    },
    {
     "photo": "s4_placed4.jpg",
@@ -767,7 +767,7 @@
     "arrow_off_deg": null,
     "iou": 0.99119402120387,
     "note": "found by its own texture (641 points); lined up by texture (809 points), marker from the layer photo",
-    "seconds": 1.1444215774536133
+    "seconds": 1.141721248626709
    }
   ]
  }
