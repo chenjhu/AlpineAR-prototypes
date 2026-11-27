@@ -1,0 +1,545 @@
+{
+ "m1": {
+  "truth": {
+   "J": 86.19140625,
+   "start": 67.734375,
+   "r_B": 18.45703125,
+   "L_C": 37.08984375,
+   "length_cm": [
+    27.7294921875,
+    46.2744140625
+   ],
+   "depth_cm": 29.800243377685547
+  },
+  "zone": {
+   "photo_ts": 1.0,
+   "image_size": [
+    1280,
+    960
+   ],
+   "max": [
+    [
+     629,
+     657
+    ],
+    [
+     1037,
+     616
+    ],
+    [
+     1010,
+     366
+    ],
+    [
+     602,
+     407
+    ]
+   ],
+   "min": [
+    [
+     629,
+     657
+    ],
+    [
+     872,
+     633
+    ],
+    [
+     845,
+     382
+    ],
+    [
+     602,
+     407
+    ]
+   ],
+   "max_cm": [
+    [
+     9.8,
+     23.9
+    ],
+    [
+     50.9,
+     7.6
+    ],
+    [
+     61.3,
+     33.7
+    ],
+    [
+     20.2,
+     50.0
+    ]
+   ],
+   "min_cm": [
+    [
+     9.8,
+     23.9
+    ],
+    [
+     34.3,
+     14.2
+    ],
+    [
+     44.6,
+     40.3
+    ],
+    [
+     20.2,
+     50.0
+    ]
+   ],
+   "length_cm": [
+    26.3,
+    44.2
+   ],
+   "depth_cm": 28.1,
+   "depth_range_cm": [
+    26.8,
+    32.7
+   ],
+   "wall_cm": {
+    "origin": [
+     -31.2,
+     56.0
+    ],
+    "u": [
+     0.92946,
+     -0.36892
+    ],
+    "n": [
+     0.36892,
+     0.92946
+    ],
+    "joint": 67.3,
+    "x": 17.36,
+    "y": 35.8,
+    "depth": [
+     -14.72,
+     13.41
+    ],
+    "fraction": 0.25,
+    "start": 49.94,
+    "rule": "next_to"
+   },
+   "mode": "next_to",
+   "laid": "laid stone from placed_20261127_120000.placement.json, found by its own texture (257 points)",
+   "note": "",
+   "ts": 1795805642.735854
+  },
+  "log": {
+   "layer": "mode: next to a laid stone, laid stone from placed_20261127_120000.placement.json, found by its own texture (257 points)\nscale: QR 10 in the photo (9 px/cm there), cm in its frame\n2 stones from photo_20261127_120100.jpg\n  stone 0: area 910.8 cm2, 58 points\n  stone 1: area 938.5 cm2, 37 points\n  stone 2: area 1845.0 cm2, 72 points\nzone: next stone 26.3-44.2 cm long, 26.8-32.7 cm deep (sent after a Yes)",
+   "cand": "candidate: 36.1 x 30.3 cm\nresult: fits (zone wants 26.3-44.2 cm long, 26.8-32.7 cm deep)"
+  },
+  "err": {
+   "r_B": -1.0970312500000006,
+   "L_C": -1.2898437500000028,
+   "length_lo": -1.4294921874999993,
+   "length_hi": -2.074414062499997,
+   "depth": -0.050243377685546875
+  },
+  "alone": {
+   "log": "mode: next to a laid stone, no placement check yet in this folder\nscale: QR 10 in the photo (9 px/cm there), cm in its frame\n2 stones from photo_20261127_120100.jpg\n  stone 0: area 1845.0 cm2, 72 points\n  stone 1: area 910.8 cm2, 58 points\nzone: the laid stone is not found (no placement check yet in this folder)",
+   "note": "the laid stone is not found (no placement check yet in this folder)",
+   "r_B": null
+  },
+  "fit": "fits",
+  "placed": [
+   {
+    "photo": "placed_20261127_120301.jpg",
+    "why": "good",
+    "expected": "ok",
+    "got": "move",
+    "true_gap_to_D": 0.234375,
+    "true_cover_C": 0.5039494470774092,
+    "move_along": 0.0,
+    "move_across": 1.9,
+    "note": "found by its own texture (341 points); lined up by texture (709 points)"
+   },
+   {
+    "photo": "placed_20261127_120302.jpg",
+    "why": "gap",
+    "expected": "move",
+    "got": "move",
+    "true_gap_to_D": 3.984375,
+    "true_cover_C": 0.6050552922590837,
+    "move_along": -3.7,
+    "move_across": 0.0,
+    "note": "found by its own texture (240 points); lined up by texture (645 points), marker from the layer photo"
+   },
+   {
+    "photo": "placed_20261127_120303.jpg",
+    "why": "out",
+    "expected": "move",
+    "got": "move",
+    "true_gap_to_D": 0.234375,
+    "true_cover_C": 0.4976303317535545,
+    "move_along": 0.0,
+    "move_across": -5.7,
+    "note": "found by its own texture (285 points); lined up by texture (812 points)"
+   }
+  ]
+ },
+ "m2": {
+  "truth": {
+   "J": 70.21492350151517,
+   "start": 54.79025633266704,
+   "r_B": 15.424667168848131,
+   "L_C": 31.1427893957202,
+   "length_cm": [
+    23.21036451777818,
+    38.78175921563828
+   ],
+   "depth_cm": 28.323160299715894
+  },
+  "zone": {
+   "photo_ts": 1.0,
+   "image_size": [
+    1280,
+    960
+   ],
+   "max": [
+    [
+     648,
+     617
+    ],
+    [
+     1031,
+     550
+    ],
+    [
+     982,
+     291
+    ],
+    [
+     600,
+     357
+    ]
+   ],
+   "min": [
+    [
+     648,
+     617
+    ],
+    [
+     878,
+     577
+    ],
+    [
+     829,
+     317
+    ],
+    [
+     600,
+     357
+    ]
+   ],
+   "max_cm": [
+    [
+     20.8,
+     18.8
+    ],
+    [
+     27.6,
+     -19.5
+    ],
+    [
+     53.5,
+     -14.9
+    ],
+    [
+     46.7,
+     23.4
+    ]
+   ],
+   "min_cm": [
+    [
+     20.8,
+     18.8
+    ],
+    [
+     24.9,
+     -4.2
+    ],
+    [
+     50.8,
+     0.4
+    ],
+    [
+     46.7,
+     23.4
+    ]
+   ],
+   "length_cm": [
+    23.4,
+    39.0
+   ],
+   "depth_cm": 26.3,
+   "depth_range_cm": [
+    25.3,
+    30.9
+   ],
+   "wall_cm": {
+    "origin": [
+     25.1,
+     69.1
+    ],
+    "u": [
+     0.17488,
+     -0.98459
+    ],
+    "n": [
+     0.98459,
+     0.17488
+    ],
+    "joint": 64.33,
+    "x": 15.58,
+    "y": 31.17,
+    "depth": [
+     -13.04,
+     13.27
+    ],
+    "fraction": 0.25,
+    "start": 48.75,
+    "rule": "next_to"
+   },
+   "mode": "next_to",
+   "laid": "laid stone from placed_20261127_120000.placement.json, found by its own texture (596 points)",
+   "note": "",
+   "ts": 1795805651.5617902
+  },
+  "log": {
+   "layer": "mode: next to a laid stone, laid stone from placed_20261127_120000.placement.json, found by its own texture (596 points)\nscale: QR 10 in the photo (10 px/cm there), cm in its frame\n2 stones from photo_20261127_120100.jpg\n  stone 0: area 747.2 cm2, 63 points\n  stone 1: area 861.7 cm2, 37 points\n  stone 2: area 1626.3 cm2, 104 points\nzone: next stone 23.4-39.0 cm long, 25.3-30.9 cm deep (sent after a Yes)",
+   "cand": "candidate: 31.2 x 28.0 cm\nresult: fits (zone wants 23.4-39.0 cm long, 25.3-30.9 cm deep)"
+  },
+  "err": {
+   "r_B": 0.1553328311518687,
+   "L_C": 0.027210604279801487,
+   "length_lo": 0.18963548222181714,
+   "length_hi": 0.21824078436171845,
+   "depth": -0.22316029971589302
+  },
+  "alone": {
+   "log": "mode: next to a laid stone, no placement check yet in this folder\nscale: QR 10 in the photo (10 px/cm there), cm in its frame\n2 stones from photo_20261127_120100.jpg\n  stone 0: area 1626.3 cm2, 104 points\n  stone 1: area 747.2 cm2, 63 points\nzone: the laid stone is not found (no placement check yet in this folder)",
+   "note": "the laid stone is not found (no placement check yet in this folder)",
+   "r_B": null
+  },
+  "fit": "fits",
+  "placed": [
+   {
+    "photo": "placed_20261127_120301.jpg",
+    "why": "good",
+    "expected": "ok",
+    "got": "ok",
+    "true_gap_to_D": 0.13770524562319508,
+    "true_cover_C": 0.5017556150227976,
+    "move_along": 0.0,
+    "move_across": 0.0,
+    "note": "found by its own texture (413 points); lined up by texture (1626 points)"
+   },
+   {
+    "photo": "placed_20261127_120302.jpg",
+    "why": "gap",
+    "expected": "move",
+    "got": "move",
+    "true_gap_to_D": 3.850679058196839,
+    "true_cover_C": 0.6279043311177195,
+    "move_along": -4.0,
+    "move_across": 0.0,
+    "note": "found by its own texture (471 points); lined up by texture (1553 points)"
+   },
+   {
+    "photo": "placed_20261127_120303.jpg",
+    "why": "out",
+    "expected": "move",
+    "got": "move",
+    "true_gap_to_D": -0.0045456084381072515,
+    "true_cover_C": 0.5063331062450763,
+    "move_along": 0.0,
+    "move_across": -6.8,
+    "note": "found by its own texture (431 points); lined up by texture (1627 points)"
+   }
+  ]
+ },
+ "m3": {
+  "truth": {
+   "J": 65.5078125,
+   "start": 51.89843750000001,
+   "r_B": 13.609374999999993,
+   "L_C": 25.1875,
+   "length_cm": [
+    19.906249999999993,
+    32.49999999999999
+   ],
+   "depth_cm": 21.893129944801334
+  },
+  "zone": {
+   "photo_ts": 1.0,
+   "image_size": [
+    1280,
+    960
+   ],
+   "max": [
+    [
+     529,
+     493
+    ],
+    [
+     487,
+     812
+    ],
+    [
+     679,
+     837
+    ],
+    [
+     720,
+     518
+    ]
+   ],
+   "min": [
+    [
+     529,
+     493
+    ],
+    [
+     503,
+     688
+    ],
+    [
+     695,
+     713
+    ],
+    [
+     720,
+     518
+    ]
+   ],
+   "max_cm": [
+    [
+     22.7,
+     4.1
+    ],
+    [
+     11.0,
+     -25.8
+    ],
+    [
+     28.3,
+     -32.5
+    ],
+    [
+     40.0,
+     -2.6
+    ]
+   ],
+   "min_cm": [
+    [
+     22.7,
+     4.1
+    ],
+    [
+     15.5,
+     -14.1
+    ],
+    [
+     32.9,
+     -20.9
+    ],
+    [
+     40.0,
+     -2.6
+    ]
+   ],
+   "length_cm": [
+    19.6,
+    32.1
+   ],
+   "depth_cm": 18.6,
+   "depth_range_cm": [
+    18.7,
+    22.8
+   ],
+   "wall_cm": {
+    "origin": [
+     42.4,
+     34.0
+    ],
+    "u": [
+     -0.36408,
+     -0.93137
+    ],
+    "n": [
+     0.93137,
+     -0.36408
+    ],
+    "joint": 48.37,
+    "x": 13.35,
+    "y": 25.01,
+    "depth": [
+     -7.56,
+     11.06
+    ],
+    "fraction": 0.25,
+    "start": 35.02,
+    "rule": "next_to"
+   },
+   "mode": "next_to",
+   "laid": "laid stone from placed_20261127_120000.placement.json, found by its own texture (383 points)",
+   "note": "",
+   "ts": 1795805659.7313495
+  },
+  "log": {
+   "layer": "mode: next to a laid stone, laid stone from placed_20261127_120000.placement.json, found by its own texture (383 points)\nscale: QR 10 in the photo (10 px/cm there), cm in its frame\n2 stones from photo_20261127_120100.jpg\n  stone 0: area 424.4 cm2, 52 points\n  stone 1: area 452.6 cm2, 38 points\n  stone 2: area 888.4 cm2, 105 points\nzone: next stone 19.6-32.1 cm long, 18.7-22.8 cm deep (sent after a Yes)",
+   "cand": "candidate: 24.4 x 23.1 cm\nresult: too_deep (zone wants 19.6-32.1 cm long, 18.7-22.8 cm deep)"
+  },
+  "err": {
+   "r_B": -0.25937499999999325,
+   "L_C": -0.17749999999999844,
+   "length_lo": -0.3062499999999915,
+   "length_hi": -0.3999999999999915,
+   "depth": -1.1431299448013341
+  },
+  "alone": {
+   "log": "mode: next to a laid stone, no placement check yet in this folder\nscale: QR 10 in the photo (10 px/cm there), cm in its frame\n2 stones from photo_20261127_120100.jpg\n  stone 0: area 888.4 cm2, 105 points\n  stone 1: area 424.4 cm2, 52 points\nzone: the laid stone is not found (no placement check yet in this folder)",
+   "note": "the laid stone is not found (no placement check yet in this folder)",
+   "r_B": null
+  },
+  "fit": "too_deep",
+  "placed": [
+   {
+    "photo": "placed_20261127_120301.jpg",
+    "why": "good",
+    "expected": "ok",
+    "got": "ok",
+    "true_gap_to_D": 0.1015625,
+    "true_cover_C": 0.5080645161290323,
+    "move_along": 0.0,
+    "move_across": 0.0,
+    "note": "found by its own texture (536 points); lined up by texture (1040 points)"
+   },
+   {
+    "photo": "placed_20261127_120302.jpg",
+    "why": "gap",
+    "expected": "move",
+    "got": "move",
+    "true_gap_to_D": 3.859375,
+    "true_cover_C": 0.657258064516129,
+    "move_along": -3.1,
+    "move_across": 0.0,
+    "note": "found by its own texture (514 points); lined up by texture (1097 points)"
+   },
+   {
+    "photo": "placed_20261127_120303.jpg",
+    "why": "out",
+    "expected": "move",
+    "got": "move",
+    "true_gap_to_D": 0.1015625,
+    "true_cover_C": 0.5080645161290323,
+    "move_along": 0.0,
+    "move_across": -6.4,
+    "note": "found by its own texture (424 points); lined up by texture (1311 points)"
+   }
+  ]
+ }
+}

@@ -52,6 +52,11 @@ class DetectParams:
     stones: int = 2                # expected base stones; extra splits are merged
     min_joint_score: float = 6.0   # a split must look at least this much like a joint
     seed_radius_px: int = 6
+    # A plain ground (white paper, a sheet): stone = whatever is clearly not
+    # the ground's colour (plain_ground_distance), instead of Otsu between the
+    # ground and the most different stone. A pale stone next to a red one,
+    # or a two-tone stone, is then found whole (real-scale test, 2026-11-24).
+    plain_ground: bool = False
 
 
 @dataclass
@@ -84,6 +89,48 @@ def ground_distance(bgr: np.ndarray, border_frac: float,
     diff[..., 0] *= lightness_weight
     dist = np.linalg.norm(diff, axis=2)
     return cv2.normalize(dist, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+
+
+PLAIN_K = 3.0      # plain ground: stone = this many times the border's own spread away...
+PLAIN_MIN = 8.0    # ...and at least this far (Lab, lightness weighted)
+# A soft shadow on paper is off the ground's colour too, but smooth; a stone's
+# face is rough. Off-ground and smooth counts only when very far off (a dark
+# stone); smooth patches inside a stone come back with the hole filling.
+# Measured 2026-11-24 (grey level std in 7x7 px): shadows on paper 1.8-6,
+# stones 9-15, a smooth pale slate 6.5 (median).
+PLAIN_TEXTURE = 5.0
+PLAIN_FAR = 50.0
+
+
+def _texture(bgr: np.ndarray) -> np.ndarray:
+    """Local roughness: the grey level's standard deviation in 7x7 pixels."""
+    g = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    m = cv2.blur(g, (7, 7))
+    return np.sqrt(np.maximum(cv2.blur(g * g, (7, 7)) - m * m, 0))
+
+
+def plain_ground_distance(bgr: np.ndarray, border_frac: float,
+                          lightness_weight: float) -> tuple[np.ndarray, float]:
+    """For a plain ground: its colour as a smooth function of the position
+    (a quadratic in x and y fitted to the image border, so uneven light and
+    the lens' dark corners are followed) and each pixel's Lab distance to it.
+    Returns (distance, spread); spread = 90th percentile of the border's own
+    distance: how plain the ground is (small = plain)."""
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB).astype(np.float32)
+    h, w = lab.shape[:2]
+    b = max(2, int(border_frac * min(h, w)))
+    ring = np.zeros((h, w), bool)
+    ring[:b], ring[-b:], ring[:, :b], ring[:, -b:] = True, True, True, True
+    yy, xx = np.mgrid[0:h, 0:w].astype(np.float32)
+    x, y = xx / w - 0.5, yy / h - 0.5
+    basis = np.stack([np.ones_like(x), x, y, x * x, x * y, y * y], axis=-1)
+    weight = np.array([lightness_weight, 1.0, 1.0], np.float32)
+    keep = ring
+    for _ in range(2):  # fit, drop what is far off (something lying on the border), fit again
+        coef, *_ = np.linalg.lstsq(basis[keep], lab[keep], rcond=None)
+        dist = np.linalg.norm((lab - basis @ coef) * weight, axis=2)
+        keep = ring & (dist <= 3 * np.median(dist[ring]) + 1.0)
+    return dist, float(np.percentile(dist[ring], 90))
 
 
 def _fill_holes(mask: np.ndarray) -> np.ndarray:
@@ -156,9 +203,13 @@ def _merge_weak_splits(markers: np.ndarray, gray: np.ndarray,
         score, a, b = min(pairs)
         if len(labels) <= target and score >= min_score:
             return
-        line = (cv2.dilate(np.uint8(markers == a), None, iterations=2) > 0) & (markers == -1)
+        # Remove only the line between a and b. (Clearing every line around a
+        # also erased a's border with a third segment, which then no longer
+        # touched anything and could never be merged.)
+        grow = lambda l: cv2.dilate(np.uint8(markers == l), None, iterations=2) > 0
+        line = grow(a) & grow(b) & (markers == -1)
         markers[markers == b] = a
-        markers[line & (cv2.dilate(np.uint8(markers == a), None, iterations=1) > 0)] = a
+        markers[line] = a
 
 
 def _to_stone(contour: np.ndarray, scale: float) -> Stone:
@@ -185,11 +236,17 @@ def detect_stones(bgr: np.ndarray, params: DetectParams | None = None,
     gray = cv2.cvtColor(smooth, cv2.COLOR_BGR2GRAY)
     edges = auto_canny(gray, p.canny_sigma)
 
-    dist = ground_distance(smooth, p.border_frac, p.lightness_weight)
-    if p.ground_thresh is None:
-        _, fg = cv2.threshold(dist, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+    if p.plain_ground:
+        raw, spread = plain_ground_distance(smooth, p.border_frac, p.lightness_weight)
+        off = raw > max(PLAIN_K * spread, PLAIN_MIN)
+        fg = np.uint8(off & ((_texture(img) > PLAIN_TEXTURE) | (raw > PLAIN_FAR))) * 255
+        dist = cv2.normalize(raw, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     else:
-        _, fg = cv2.threshold(dist, p.ground_thresh, 255, cv2.THRESH_BINARY)
+        dist = ground_distance(smooth, p.border_frac, p.lightness_weight)
+        if p.ground_thresh is None:
+            _, fg = cv2.threshold(dist, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        else:
+            _, fg = cv2.threshold(dist, p.ground_thresh, 255, cv2.THRESH_BINARY)
     k = max(3, int(p.morph_frac * w) | 1)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (k, k))
     fg = cv2.morphologyEx(fg, cv2.MORPH_CLOSE, kernel)
@@ -201,9 +258,17 @@ def detect_stones(bgr: np.ndarray, params: DetectParams | None = None,
 
     if seeds:
         seed_labels = np.zeros((h, w), np.int32)
+        ys, xs = np.nonzero(fg)
         for i, (x, y) in enumerate(seeds):
-            cv2.circle(seed_labels, (int(x * scale), int(y * scale)),
-                       p.seed_radius_px, i + 1, cv2.FILLED)
+            sx, sy = int(x * scale), int(y * scale)
+            # A tap just off the mask (on a pale patch at the stone's edge, a
+            # finger's width beside it): move it to the nearest stone pixel.
+            if len(xs) and not fg[min(sy, h - 1), min(sx, w - 1)]:
+                d2 = (xs - sx) ** 2 + (ys - sy) ** 2
+                j = int(np.argmin(d2))
+                if d2[j] <= (0.03 * w) ** 2:
+                    sx, sy = int(xs[j]), int(ys[j])
+            cv2.circle(seed_labels, (sx, sy), p.seed_radius_px, i + 1, cv2.FILLED)
         markers = _watershed(smooth, sure_bg, seed_labels)
     else:
         # Keep the seeding that separates the most stones (ties: the first,
@@ -212,12 +277,17 @@ def detect_stones(bgr: np.ndarray, params: DetectParams | None = None,
         # here: its dilation would bridge the thin cut again.)
         edge_cut = cv2.bitwise_and(fg, cv2.bitwise_not(cv2.dilate(edges, None)))
         edge_cut = _remove_small(edge_cut, p.min_area_frac * h * w)
-        best = None
+        best = fewest = None
         for src, frac in itertools.product((fg, edge_cut), (0.5, 0.65, 0.8)):
             n, labels = _cores_from_distance(src, frac)
             if n - 1 <= p.max_stones and (best is None or n > best[0]):
                 best = (n, labels, src)
-        _, seed_labels, cut = best
+            if fewest is None or n < fewest[0]:
+                fewest = (n, labels, src)
+        # A busy ground (stained concrete, shoes in the photo) can give more than
+        # max_stones seeds in every try: then the try with the fewest, and the
+        # merging below brings it down (phone photos, 2026-11-18: this crashed).
+        _, seed_labels, cut = best or fewest
         markers = _watershed(smooth, sure_bg, seed_labels)
         _merge_weak_splits(markers, gray, p.stones, p.min_joint_score)
 

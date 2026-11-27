@@ -1,0 +1,774 @@
+{
+ "s1": {
+  "px_per_cm": 11.636363636363637,
+  "frame_cm": 110,
+  "tilt_deg": 0,
+  "found_outlines": 2,
+  "iou": {
+   "A": 0.9926425970873787,
+   "B": 0.9906011670767462
+  },
+  "true_stones_cm": {
+   "A": [
+    34.93291974067688,
+    29.915473699569702
+   ],
+   "B": [
+    32.92484402656555,
+    28.86359691619873
+   ]
+  },
+  "true_length": [
+   17.097149062697174,
+   51.291447188091524
+  ],
+  "true_depth": [
+   26.450581777095795,
+   32.32848883867264
+  ],
+  "sys_length": [
+   16.4,
+   49.2
+  ],
+  "sys_depth": [
+   26.1,
+   31.9
+  ],
+  "zone_note": "",
+  "candidates": [
+   {
+    "photo": "s1_cand1.jpg",
+    "why": "fits",
+    "true_cm": [
+     34.19158697128296,
+     29.31208848953247
+    ],
+    "expected": "fits",
+    "result": "fits",
+    "sys_cm": [
+     34.0,
+     28.0
+    ],
+    "note": "",
+    "iou": 0.9339769098834647,
+    "seconds": 0.7550463676452637
+   },
+   {
+    "photo": "s1_cand2.jpg",
+    "why": "edge",
+    "true_cm": [
+     34.12450551986694,
+     26.966447830200195
+    ],
+    "expected": "fits",
+    "result": "fits",
+    "sys_cm": [
+     32.8,
+     26.8
+    ],
+    "note": "",
+    "iou": 0.9931912006817073,
+    "seconds": 0.8105950355529785
+   },
+   {
+    "photo": "s1_cand3.jpg",
+    "why": "deep",
+    "true_cm": [
+     40.289859771728516,
+     34.16889429092407
+    ],
+    "expected": "too_deep",
+    "result": "too_deep",
+    "sys_cm": [
+     40.1,
+     34.1
+    ],
+    "note": "",
+    "iou": 0.9655114214737419,
+    "seconds": 0.7818849086761475
+   },
+   {
+    "photo": "s1_cand4.jpg",
+    "why": "long",
+    "true_cm": [
+     58.90347480773926,
+     29.3390154838562
+    ],
+    "expected": "too_long",
+    "result": "too_long",
+    "sys_cm": [
+     57.0,
+     29.1
+    ],
+    "note": "",
+    "iou": 0.9737042128916228,
+    "seconds": 0.7577362060546875
+   }
+  ],
+  "placed": [
+   {
+    "photo": "s1_placed1.jpg",
+    "why": "good",
+    "expected": "move",
+    "slack_cm": -0.5603348631689613,
+    "result": "move",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     -1.1717535158885326
+    ],
+    "sys_move_cm": [
+     0.0,
+     1.9
+    ],
+    "arrow_off_deg": 1.1832213712034423,
+    "iou": 0.9228542818342684,
+    "note": "found by its own texture (934 points); lined up by texture (529 points)",
+    "seconds": 1.053208589553833
+   },
+   {
+    "photo": "s1_placed2.jpg",
+    "why": "along",
+    "expected": "move",
+    "slack_cm": -4.411207576487669,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     -12.737179495514454,
+     -1.122585326263085
+    ],
+    "sys_move_cm": [
+     -13.3,
+     2.3
+    ],
+    "arrow_off_deg": 1.9649790591003204,
+    "iou": 0.9328329886686649,
+    "note": "found by its own texture (1240 points); lined up by texture (366 points)",
+    "seconds": 1.035520315170288
+   },
+   {
+    "photo": "s1_placed3.jpg",
+    "why": "out",
+    "expected": "move",
+    "slack_cm": -4.7223498177284675,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     5.2698301897885695
+    ],
+    "sys_move_cm": [
+     0.0,
+     -4.3
+    ],
+    "arrow_off_deg": 1.422551891095496,
+    "iou": 0.9322573109058927,
+    "note": "found by its own texture (1035 points); lined up by texture (685 points)",
+    "seconds": 1.056919813156128
+   },
+   {
+    "photo": "s1_placed4.jpg",
+    "why": "turned",
+    "expected": "move",
+    "slack_cm": -1.1794283497183145,
+    "result": "move",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     -1.4715158944242965
+    ],
+    "sys_move_cm": [
+     0.0,
+     2.4
+    ],
+    "arrow_off_deg": 0.9130028747719445,
+    "iou": 0.9326827654647701,
+    "note": "found by its own texture (1093 points); lined up by texture (570 points), marker from the layer photo",
+    "seconds": 1.102891206741333
+   }
+  ]
+ },
+ "s2": {
+  "px_per_cm": 9.846153846153847,
+  "frame_cm": 130,
+  "tilt_deg": 5,
+  "found_outlines": 2,
+  "iou": {
+   "A": 0.9913785633827225,
+   "B": 0.9929215202788878
+  },
+  "true_stones_cm": {
+   "A": [
+    36.87990140914917,
+    30.90362024307251
+   ],
+   "B": [
+    35.8827645778656,
+    31.886617422103882
+   ]
+  },
+  "true_length": [
+   18.32002129519268,
+   54.96006388557805
+  ],
+  "true_depth": [
+   28.255606949329376,
+   34.534630715847015
+  ],
+  "sys_length": [
+   18.6,
+   55.7
+  ],
+  "sys_depth": [
+   29.2,
+   35.7
+  ],
+  "zone_note": "",
+  "candidates": [
+   {
+    "photo": "s2_cand1.jpg",
+    "why": "fits",
+    "true_cm": [
+     36.02940320968628,
+     31.829004287719727
+    ],
+    "expected": "fits",
+    "result": "fits",
+    "sys_cm": [
+     32.2,
+     32.2
+    ],
+    "note": "",
+    "iou": 0.9901423353927024,
+    "seconds": 0.713937520980835
+   },
+   {
+    "photo": "s2_cand2.jpg",
+    "why": "edge",
+    "true_cm": [
+     36.53897523880005,
+     28.73389720916748
+    ],
+    "expected": "fits",
+    "result": "too_shallow",
+    "sys_cm": [
+     35.9,
+     27.7
+    ],
+    "note": "",
+    "iou": 0.8653400402692922,
+    "seconds": 0.7460906505584717
+   },
+   {
+    "photo": "s2_cand3.jpg",
+    "why": "deep",
+    "true_cm": [
+     43.16376209259033,
+     36.58876895904541
+    ],
+    "expected": "too_deep",
+    "result": "fits",
+    "sys_cm": [
+     41.9,
+     35.7
+    ],
+    "note": "",
+    "iou": 0.9803634516359941,
+    "seconds": 0.7453916072845459
+   },
+   {
+    "photo": "s2_cand4.jpg",
+    "why": "long",
+    "true_cm": [
+     63.096065521240234,
+     31.316189765930176
+    ],
+    "expected": "too_long",
+    "result": "fits",
+    "sys_cm": [
+     51.4,
+     29.7
+    ],
+    "note": "",
+    "iou": 0.727926827451623,
+    "seconds": 0.7503149509429932
+   }
+  ],
+  "placed": [
+   {
+    "photo": "s2_placed1.jpg",
+    "why": "good",
+    "expected": "move",
+    "slack_cm": -0.842903488891217,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     1.1177333471214688
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.9855309997807727,
+    "note": "found by its own texture (864 points); lined up by texture (709 points)",
+    "seconds": 1.1567366123199463
+   },
+   {
+    "photo": "s2_placed2.jpg",
+    "why": "along",
+    "expected": "move",
+    "slack_cm": -4.220277266784407,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     -13.265176501108847,
+     0.9851983205486938
+    ],
+    "sys_move_cm": [
+     -14.5,
+     0.0
+    ],
+    "arrow_off_deg": 3.1685966376489967,
+    "iou": 0.9749154189797941,
+    "note": "found by its own texture (631 points); lined up by texture (926 points)",
+    "seconds": 1.0947747230529785
+   },
+   {
+    "photo": "s2_placed3.jpg",
+    "why": "out",
+    "expected": "move",
+    "slack_cm": -7.998261965179999,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     8.217280672385773
+    ],
+    "sys_move_cm": [
+     0.0,
+     -8.5
+    ],
+    "arrow_off_deg": 0.012538434218553753,
+    "iou": 0.979763692147007,
+    "note": "found by its own texture (879 points); lined up by texture (897 points)",
+    "seconds": 1.1317203044891357
+   },
+   {
+    "photo": "s2_placed4.jpg",
+    "why": "turned",
+    "expected": "move",
+    "slack_cm": -0.24022161028485556,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.4549850715448578
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.9858502050830633,
+    "note": "found by its own texture (881 points); lined up by texture (686 points)",
+    "seconds": 1.0815136432647705
+   }
+  ]
+ },
+ "s3": {
+  "px_per_cm": 8.533333333333333,
+  "frame_cm": 150,
+  "tilt_deg": 0,
+  "found_outlines": 2,
+  "iou": {
+   "A": 0.9902727849439628,
+   "B": 0.9901517208095798
+  },
+  "true_stones_cm": {
+   "A": [
+    33.28607439994812,
+    29.244166016578674
+   ],
+   "B": [
+    35.859375,
+    29.8828125
+   ]
+  },
+  "true_length": [
+   17.578125,
+   52.734375
+  ],
+  "true_depth": [
+   26.607140332460403,
+   32.51983818411827
+  ],
+  "sys_length": [
+   17.0,
+   50.9
+  ],
+  "sys_depth": [
+   26.3,
+   32.1
+  ],
+  "zone_note": "",
+  "candidates": [
+   {
+    "photo": "s3_cand1.jpg",
+    "why": "fits",
+    "true_cm": [
+     35.10298728942871,
+     29.465017318725586
+    ],
+    "expected": "fits",
+    "result": "fits",
+    "sys_cm": [
+     34.8,
+     27.4
+    ],
+    "note": "",
+    "iou": 0.9592579546788775,
+    "seconds": 0.7716329097747803
+   },
+   {
+    "photo": "s3_cand2.jpg",
+    "why": "edge",
+    "true_cm": [
+     35.072102546691895,
+     27.111809253692627
+    ],
+    "expected": "fits",
+    "result": "fits",
+    "sys_cm": [
+     33.8,
+     26.5
+    ],
+    "note": "",
+    "iou": 0.9942358498118645,
+    "seconds": 0.7368662357330322
+   },
+   {
+    "photo": "s3_cand3.jpg",
+    "why": "deep",
+    "true_cm": [
+     40.508408546447754,
+     35.086729526519775
+    ],
+    "expected": "too_deep",
+    "result": "too_deep",
+    "sys_cm": [
+     40.5,
+     35.0
+    ],
+    "note": "",
+    "iou": 0.9744734934716253,
+    "seconds": 0.7233612537384033
+   },
+   {
+    "photo": "s3_cand4.jpg",
+    "why": "long",
+    "true_cm": [
+     60.54651737213135,
+     29.484925270080566
+    ],
+    "expected": "too_long",
+    "result": "too_long",
+    "sys_cm": [
+     60.0,
+     29.7
+    ],
+    "note": "",
+    "iou": 0.952233011269553,
+    "seconds": 0.7416703701019287
+   }
+  ],
+  "placed": [
+   {
+    "photo": "s3_placed1.jpg",
+    "why": "good",
+    "expected": "move",
+    "slack_cm": -0.3125,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.9375
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.9483993821242144,
+    "note": "found by its own texture (804 points); lined up by texture (449 points), marker from the layer photo",
+    "seconds": 1.243187427520752
+   },
+   {
+    "photo": "s3_placed2.jpg",
+    "why": "along",
+    "expected": "move",
+    "slack_cm": -4.5263671875,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     13.037109375,
+     1.0546875
+    ],
+    "sys_move_cm": [
+     13.6,
+     0.0
+    ],
+    "arrow_off_deg": 10.073783769176309,
+    "iou": 0.9509047233238099,
+    "note": "found by its own texture (726 points); lined up by texture (413 points), marker from the layer photo",
+    "seconds": 1.2704119682312012
+   },
+   {
+    "photo": "s3_placed3.jpg",
+    "why": "out",
+    "expected": "move",
+    "slack_cm": -6.875,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     7.55859375
+    ],
+    "sys_move_cm": [
+     0.0,
+     -6.5
+    ],
+    "arrow_off_deg": 3.7367796218598546,
+    "iou": 0.9494030446939772,
+    "note": "found by its own texture (706 points); lined up by texture (470 points), marker from the layer photo",
+    "seconds": 1.3055498600006104
+   },
+   {
+    "photo": "s3_placed4.jpg",
+    "why": "turned",
+    "expected": "move",
+    "slack_cm": -0.3125,
+    "result": "move",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.703125
+    ],
+    "sys_move_cm": [
+     0.0,
+     1.6
+    ],
+    "arrow_off_deg": 177.73268616812015,
+    "iou": 0.9535657667033751,
+    "note": "found by its own texture (712 points); lined up by texture (395 points)",
+    "seconds": 1.1687662601470947
+   }
+  ]
+ },
+ "s4": {
+  "px_per_cm": 8.533333333333333,
+  "frame_cm": 150,
+  "tilt_deg": 6,
+  "found_outlines": 2,
+  "iou": {
+   "A": 0.9910263089346184,
+   "B": 0.9724900737379467
+  },
+  "true_stones_cm": {
+   "A": [
+    37.91952610015869,
+    31.887398958206177
+   ],
+   "B": [
+    34.979403018951416,
+    29.973369240760803
+   ]
+  },
+  "true_length": [
+   18.432503768581107,
+   55.29751130574332
+  ],
+  "true_depth": [
+   27.83734568953514,
+   34.02342250943184
+  ],
+  "sys_length": [
+   18.4,
+   55.1
+  ],
+  "sys_depth": [
+   28.1,
+   34.3
+  ],
+  "zone_note": "",
+  "candidates": [
+   {
+    "photo": "s4_cand1.jpg",
+    "why": "fits",
+    "true_cm": [
+     36.84993267059326,
+     30.88557720184326
+    ],
+    "expected": "fits",
+    "result": "fits",
+    "sys_cm": [
+     35.1,
+     30.4
+    ],
+    "note": "",
+    "iou": 0.9930169266511782,
+    "seconds": 0.749988317489624
+   },
+   {
+    "photo": "s4_cand2.jpg",
+    "why": "edge",
+    "true_cm": [
+     36.79102420806885,
+     28.379132747650146
+    ],
+    "expected": "fits",
+    "result": "too_shallow",
+    "sys_cm": [
+     35.3,
+     26.8
+    ],
+    "note": "",
+    "iou": 0.9616039952996475,
+    "seconds": 0.7932500839233398
+   },
+   {
+    "photo": "s4_cand3.jpg",
+    "why": "deep",
+    "true_cm": [
+     42.47955799102783,
+     36.81979179382324
+    ],
+    "expected": "too_deep",
+    "result": "too_deep",
+    "sys_cm": [
+     40.9,
+     35.6
+    ],
+    "note": "",
+    "iou": 0.9567436256599634,
+    "seconds": 0.7344868183135986
+   },
+   {
+    "photo": "s4_cand4.jpg",
+    "why": "long",
+    "true_cm": [
+     63.4842586517334,
+     30.83564043045044
+    ],
+    "expected": "too_long",
+    "result": "too_shallow",
+    "sys_cm": [
+     50.6,
+     27.9
+    ],
+    "note": "",
+    "iou": 0.6877410692952148,
+    "seconds": 0.7450461387634277
+   }
+  ],
+  "placed": [
+   {
+    "photo": "s4_placed1.jpg",
+    "why": "good",
+    "expected": "ok",
+    "slack_cm": 0.718517883356725,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.0
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.9913978818602269,
+    "note": "found by its own texture (592 points); lined up by texture (857 points)",
+    "seconds": 1.0678942203521729
+   },
+   {
+    "photo": "s4_placed2.jpg",
+    "why": "along",
+    "expected": "move",
+    "slack_cm": -4.694890110111174,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     -13.585033176095372,
+     0.0
+    ],
+    "sys_move_cm": [
+     -13.8,
+     0.0
+    ],
+    "arrow_off_deg": 2.3137800209121964,
+    "iou": 0.965588598945793,
+    "note": "found by its own texture (452 points); lined up by texture (635 points)",
+    "seconds": 1.0986475944519043
+   },
+   {
+    "photo": "s4_placed3.jpg",
+    "why": "out",
+    "expected": "move",
+    "slack_cm": -6.186593503604811,
+    "result": "move",
+    "near": false,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     7.07353713114696
+    ],
+    "sys_move_cm": [
+     0.0,
+     -7.9
+    ],
+    "arrow_off_deg": 0.4468766204175492,
+    "iou": 0.9857045501370905,
+    "note": "found by its own texture (489 points); lined up by texture (883 points)",
+    "seconds": 1.1240787506103516
+   },
+   {
+    "photo": "s4_placed4.jpg",
+    "why": "turned",
+    "expected": "ok",
+    "slack_cm": 0.0046761066532781115,
+    "result": "ok",
+    "near": true,
+    "right": true,
+    "true_move_cm": [
+     0.0,
+     0.0
+    ],
+    "sys_move_cm": [
+     0.0,
+     0.0
+    ],
+    "arrow_off_deg": null,
+    "iou": 0.99119402120387,
+    "note": "found by its own texture (641 points); lined up by texture (809 points), marker from the layer photo",
+    "seconds": 1.141721248626709
+   }
+  ]
+ }
+}

@@ -1,0 +1,400 @@
+{
+ "s1": {
+  "px_per_cm": 11.636363636363637,
+  "frame_cm": 110,
+  "tilt_deg": 0,
+  "found_outlines": 6,
+  "iou": {
+   "A": 0.06435196338231751,
+   "B": 0.06020349272171515
+  },
+  "true_stones_cm": {
+   "A": [
+    37.86616110801697,
+    23.920223712921143
+   ],
+   "B": [
+    30.265082597732544,
+    28.39962673187256
+   ]
+  },
+  "true_length": [
+   18.025390625,
+   54.076171875
+  ],
+  "true_depth": [
+   23.543932700157168,
+   28.775917744636537
+  ],
+  "sys_length": [
+   5.6,
+   16.9
+  ],
+  "sys_depth": [
+   14.5,
+   17.7
+  ],
+  "zone_note": "",
+  "candidates": [
+   {
+    "photo": "s1_cand1.jpg",
+    "why": "fits",
+    "true_cm": [
+     35.9639048576355,
+     26.07668161392212
+    ],
+    "expected": "fits",
+    "result": "no answer",
+    "sys_cm": null,
+    "note": "no reply within 30 s",
+    "iou": 0.0,
+    "seconds": 30
+   },
+   {
+    "photo": "s1_cand2.jpg",
+    "why": "edge",
+    "true_cm": [
+     36.29553556442261,
+     23.880891799926758
+    ],
+    "expected": "fits",
+    "result": "no answer",
+    "sys_cm": null,
+    "note": "no reply within 30 s",
+    "iou": 0.0,
+    "seconds": 30
+   },
+   {
+    "photo": "s1_cand3.jpg",
+    "why": "deep",
+    "true_cm": [
+     36.09713554382324,
+     35.70643901824951
+    ],
+    "expected": "too_deep",
+    "result": "no answer",
+    "sys_cm": null,
+    "note": "no reply within 30 s",
+    "iou": 0.0,
+    "seconds": 30
+   },
+   {
+    "photo": "s1_cand4.jpg",
+    "why": "long",
+    "true_cm": [
+     62.21371650695801,
+     26.044795513153076
+    ],
+    "expected": "too_long",
+    "result": "too_shallow",
+    "sys_cm": [
+     10.7,
+     5.3
+    ],
+    "note": "",
+    "iou": 0.01874410579793915,
+    "seconds": 0.5728099346160889
+   }
+  ]
+ },
+ "s2": {
+  "px_per_cm": 8.533333333333333,
+  "frame_cm": 150,
+  "tilt_deg": 8,
+  "found_outlines": 2,
+  "iou": {
+   "A": 0.6385042963869553,
+   "B": 0.6980932777206001
+  },
+  "true_stones_cm": {
+   "A": [
+    46.05504512786865,
+    29.855613112449646
+   ],
+   "B": [
+    28.13854157924652,
+    23.365377187728882
+   ]
+  },
+  "true_length": [
+   19.490933231144105,
+   58.472799693432314
+  ],
+  "true_depth": [
+   23.949445635080338,
+   29.271544665098194
+  ],
+  "sys_length": [
+   14.1,
+   42.4
+  ],
+  "sys_depth": [
+   34.5,
+   42.2
+  ],
+  "zone_note": "",
+  "candidates": [
+   {
+    "photo": "s2_cand1.jpg",
+    "why": "fits",
+    "true_cm": [
+     38.92683267593384,
+     26.552612781524658
+    ],
+    "expected": "fits",
+    "result": "no answer",
+    "sys_cm": null,
+    "note": "no reply within 30 s",
+    "iou": 0.0,
+    "seconds": 30
+   },
+   {
+    "photo": "s2_cand2.jpg",
+    "why": "edge",
+    "true_cm": [
+     38.91226053237915,
+     24.424710273742676
+    ],
+    "expected": "fits",
+    "result": "too_short",
+    "sys_cm": [
+     6.1,
+     3.7
+    ],
+    "note": "",
+    "iou": 0.02123107868539479,
+    "seconds": 0.6325812339782715
+   },
+   {
+    "photo": "s2_cand3.jpg",
+    "why": "deep",
+    "true_cm": [
+     38.984375,
+     36.484375
+    ],
+    "expected": "too_deep",
+    "result": "no answer",
+    "sys_cm": null,
+    "note": "no reply within 30 s",
+    "iou": 0.0,
+    "seconds": 30
+   },
+   {
+    "photo": "s2_cand4.jpg",
+    "why": "long",
+    "true_cm": [
+     67.15646743774414,
+     26.564903259277344
+    ],
+    "expected": "too_long",
+    "result": "no answer",
+    "sys_cm": null,
+    "note": "no reply within 30 s",
+    "iou": 0.0,
+    "seconds": 30
+   }
+  ]
+ },
+ "s3": {
+  "px_per_cm": 6.7368421052631575,
+  "frame_cm": 190,
+  "tilt_deg": 0,
+  "found_outlines": 2,
+  "iou": {
+   "A": 0.88649615894857,
+   "B": 0.6994352088661552
+  },
+  "true_stones_cm": {
+   "A": [
+    34.91545307636261,
+    24.87949848175049
+   ],
+   "B": [
+    40.68195867538452,
+    27.862037658691406
+   ]
+  },
+  "true_length": [
+   19.42789428115259,
+   58.28368284345777
+  ],
+  "true_depth": [
+   23.733691263198853,
+   29.007844877243045
+  ],
+  "sys_length": null,
+  "sys_depth": null,
+  "zone_note": "",
+  "candidates": [
+   {
+    "photo": "s3_cand1.jpg",
+    "why": "fits",
+    "true_cm": [
+     38.761630058288574,
+     26.317505836486816
+    ],
+    "expected": "fits",
+    "result": "unknown",
+    "sys_cm": [
+     null,
+     null
+    ],
+    "note": "no zone for this layer; no stone at the tap",
+    "iou": 0.0,
+    "seconds": 0.4954507350921631
+   },
+   {
+    "photo": "s3_cand2.jpg",
+    "why": "edge",
+    "true_cm": [
+     38.727591037750244,
+     24.232590198516846
+    ],
+    "expected": "fits",
+    "result": "unknown",
+    "sys_cm": [
+     null,
+     null
+    ],
+    "note": "no zone for this layer; no stone at the tap",
+    "iou": 0.0,
+    "seconds": 0.5080561637878418
+   },
+   {
+    "photo": "s3_cand3.jpg",
+    "why": "deep",
+    "true_cm": [
+     38.79260540008545,
+     36.2108039855957
+    ],
+    "expected": "too_deep",
+    "result": "unknown",
+    "sys_cm": [
+     null,
+     null
+    ],
+    "note": "no zone for this layer; no stone at the tap",
+    "iou": 0.0,
+    "seconds": 0.48251938819885254
+   },
+   {
+    "photo": "s3_cand4.jpg",
+    "why": "long",
+    "true_cm": [
+     67.07137107849121,
+     26.180906295776367
+    ],
+    "expected": "too_long",
+    "result": "unknown",
+    "sys_cm": [
+     2.3,
+     1.2
+    ],
+    "note": "no zone for this layer",
+    "iou": 0.0017564997749938305,
+    "seconds": 0.47904396057128906
+   }
+  ]
+ },
+ "s4": {
+  "px_per_cm": 8.533333333333333,
+  "frame_cm": 150,
+  "tilt_deg": 4,
+  "found_outlines": 3,
+  "iou": {
+   "A": 0.362909832639481,
+   "B": 0.07163650263904613
+  },
+  "true_stones_cm": {
+   "A": [
+    39.84731197357178,
+    25.895259976387024
+   ],
+   "B": [
+    35.83627939224243,
+    21.81973099708557
+   ]
+  },
+  "true_length": [
+   19.21875,
+   57.65625
+  ],
+  "true_depth": [
+   21.471745938062668,
+   26.24324503540993
+  ],
+  "sys_length": null,
+  "sys_depth": null,
+  "zone_note": "zero-size array to reduction operation minimum which has no identity",
+  "candidates": [
+   {
+    "photo": "s4_cand1.jpg",
+    "why": "fits",
+    "true_cm": [
+     38.37139844894409,
+     23.762023448944092
+    ],
+    "expected": "fits",
+    "result": "unknown",
+    "sys_cm": [
+     10.3,
+     5.0
+    ],
+    "note": "no zone for this layer: zero-size array to reduction operation minimum which has no identity",
+    "iou": 0.03097084441330552,
+    "seconds": 0.5139832496643066
+   },
+   {
+    "photo": "s4_cand2.jpg",
+    "why": "edge",
+    "true_cm": [
+     38.34939956665039,
+     22.042179107666016
+    ],
+    "expected": "fits",
+    "result": "unknown",
+    "sys_cm": [
+     null,
+     null
+    ],
+    "note": "no zone for this layer: zero-size array to reduction operation minimum which has no identity; no stone at the tap",
+    "iou": 0.0,
+    "seconds": 0.5694148540496826
+   },
+   {
+    "photo": "s4_cand3.jpg",
+    "why": "deep",
+    "true_cm": [
+     38.36517095565796,
+     32.695302963256836
+    ],
+    "expected": "too_deep",
+    "result": "unknown",
+    "sys_cm": [
+     null,
+     null
+    ],
+    "note": "no zone for this layer: zero-size array to reduction operation minimum which has no identity; no stone at the tap",
+    "iou": 0.0,
+    "seconds": 0.5626497268676758
+   },
+   {
+    "photo": "s4_cand4.jpg",
+    "why": "long",
+    "true_cm": [
+     66.24887466430664,
+     23.69523048400879
+    ],
+    "expected": "too_long",
+    "result": "unknown",
+    "sys_cm": [
+     null,
+     null
+    ],
+    "note": "no zone for this layer: zero-size array to reduction operation minimum which has no identity; no stone at the tap",
+    "iou": 0.0,
+    "seconds": 0.4892692565917969
+   }
+  ]
+ }
+}

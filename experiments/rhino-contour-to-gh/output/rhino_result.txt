@@ -1,0 +1,4 @@
+2 stones from photo 01_L0_AB.jpeg, unit cm
+stone 0: area GH 928.3 / Python 928.3 cm2 (same), 275 points
+stone 1: area GH 743.9 / Python 743.9 cm2 (same), 217 points
+PASS

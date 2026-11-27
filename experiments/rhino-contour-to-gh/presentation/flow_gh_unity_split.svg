@@ -1,0 +1,156 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1240" height="1520" viewBox="0 0 1240 1520" font-family="Helvetica Neue, Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#000"/>
+    </marker>
+    <marker id="r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#c62828"/>
+    </marker>
+    <marker id="g" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#2e7d32"/>
+    </marker>
+    <style>
+      .box { fill: #fff; stroke: #000; stroke-width: 1.6; }
+      .dash { fill: #fff; stroke: #000; stroke-width: 1.6; stroke-dasharray: 7 5; }
+      .t { font-size: 21px; font-weight: 700; fill: #000; }
+      .d { font-size: 19px; fill: #000; }
+      .s { font-size: 17px; fill: #666; }
+      .m { font-family: Menlo, monospace; font-size: 17px; }
+      .ln { stroke: #000; stroke-width: 1.6; fill: none; }
+      .rl { stroke: #c62828; stroke-width: 1.8; fill: none; stroke-dasharray: 7 5; }
+      .gl { stroke: #2e7d32; stroke-width: 1.6; stroke-dasharray: 6 5; fill: none; }
+      .gt { font-size: 18px; font-weight: 700; fill: #2e7d32; }
+      .lane { fill: #fff; stroke: #000; stroke-width: 1.2; }
+      .lanet { font-size: 20px; font-weight: 700; fill: #8a6d1c; letter-spacing: 0.5px; }
+      .ph { font-size: 17px; font-weight: 700; fill: #8a6d1c; letter-spacing: 0.5px; }
+      .al { font-size: 16px; fill: #000; text-anchor: middle; }
+      .ar { font-size: 15px; font-weight: 700; fill: #c62828; text-anchor: middle; }
+      .ag { font-size: 15px; fill: #666; text-anchor: middle; }
+      .ab { font-size: 15px; font-weight: 700; fill: #2e7d32; text-anchor: middle; }
+    </style>
+  </defs>
+  <rect width="1240" height="1520" fill="#fff"/>
+
+  <text x="40" y="48" font-size="26" font-weight="700">Basic prototype: who does what</text>
+  <text x="40" y="78" class="d" fill="#555">Unity (phone) = what the person touches, sees, hears · Grasshopper (laptop) = the geometry</text>
+
+  <!-- lane headers -->
+  <rect class="lane" x="40" y="105" width="440" height="40"/>
+  <text x="260" y="132" class="lanet" text-anchor="middle">UNITY · phone (COMPAS XR)</text>
+  <rect class="lane" x="500" y="105" width="240" height="40"/>
+  <text x="620" y="132" class="lanet" text-anchor="middle">MQTT</text>
+  <rect class="lane" x="760" y="105" width="440" height="40"/>
+  <text x="980" y="132" class="lanet" text-anchor="middle">GRASSHOPPER · laptop</text>
+  <rect x="500" y="155" width="240" height="1015" fill="#f5f5f5"/>
+
+  <!-- A -->
+  <text x="40" y="182" class="ph">A · PHOTOGRAPH THE LAYER</text>
+
+  <rect class="dash" x="40" y="195" width="440" height="90" rx="8"/>
+  <text x="60" y="228" class="t">1. Button “Tap when in position”</text>
+  <text x="60" y="255" class="d">Phone held still above the built layer</text>
+  <line class="ln" x1="260" y1="285" x2="260" y2="313" marker-end="url(#a)"/>
+
+  <rect class="dash" x="40" y="315" width="440" height="90" rx="8"/>
+  <text x="60" y="348" class="t">2. Take the photo, vibrate</text>
+  <text x="60" y="375" class="d">“You can take the phone away”</text>
+
+  <line class="rl" x1="480" y1="360" x2="758" y2="360" marker-end="url(#r)"/>
+  <text x="620" y="350" class="al">photo (+ camera height)</text>
+  <text x="620" y="382" class="ab">GH side built (fake phone)</text>
+
+  <rect class="box" x="760" y="315" width="440" height="110" rx="8"/>
+  <text x="780" y="348" class="t">3. Detect the stone outlines</text>
+  <text x="780" y="375" class="d">Mode 1 detection + <tspan class="m">receive_contours</tspan></text>
+  <text x="780" y="399" class="d">→ one closed curve per stone</text>
+  <line class="ln" x1="980" y1="425" x2="980" y2="463" marker-end="url(#a)"/>
+
+  <rect class="dash" x="760" y="465" width="440" height="90" rx="8"/>
+  <text x="780" y="498" class="t">4. Curves → points or mesh</text>
+  <text x="780" y="525" class="d">Payload Prep skips curves</text>
+
+  <line class="ln" x1="760" y1="505" x2="482" y2="505" marker-end="url(#a)"/>
+  <text x="620" y="495" class="al">the outlines</text>
+  <text x="620" y="527" class="ag">Payload Prep → MQTT</text>
+
+  <rect class="dash" x="40" y="465" width="440" height="150" rx="8"/>
+  <text x="60" y="498" class="t">5. Show the outlines, ask</text>
+  <text x="60" y="525" class="d">“Are these the stones?”  Yes / No</text>
+  <text x="60" y="551" class="s">No → back to 1, take the photo again</text>
+
+  <!-- B -->
+  <text x="760" y="580" class="ph">B · WHERE THE NEXT STONE GOES</text>
+
+  <line class="rl" x1="480" y1="605" x2="758" y2="605" marker-end="url(#r)"/>
+  <text x="620" y="595" class="al">Yes</text>
+  <text x="620" y="627" class="ar">missing: phone → GH</text>
+
+  <rect class="dash" x="760" y="590" width="440" height="130" rx="8"/>
+  <text x="780" y="623" class="t">6. Rule of thirds</text>
+  <text x="780" y="650" class="d">→ max contour (allowed zone)</text>
+  <text x="780" y="674" class="d">→ min contour (must zone)</text>
+  <text x="780" y="700" class="s">exists in Python (Mode 1), port to GH</text>
+
+  <line class="ln" x1="760" y1="690" x2="482" y2="690" marker-end="url(#a)"/>
+  <text x="620" y="680" class="al">max + min contour</text>
+  <text x="620" y="712" class="ag">Payload Prep → MQTT</text>
+
+  <rect class="dash" x="40" y="650" width="440" height="110" rx="8"/>
+  <text x="60" y="683" class="t">7. Show both contours + sound</text>
+  <text x="60" y="710" class="d">From here the screen stays still</text>
+  <text x="60" y="734" class="s">(no AR tracking needed)</text>
+  <line class="ln" x1="420" y1="760" x2="420" y2="803" marker-end="url(#a)"/>
+
+  <!-- C -->
+  <text x="40" y="792" class="ph">C · AT THE STONE STOCK</text>
+
+  <rect class="dash" x="40" y="805" width="440" height="90" rx="8"/>
+  <text x="60" y="838" class="t">8. Over a candidate stone, tap</text>
+  <text x="60" y="865" class="d">Phone as high as in step 1</text>
+
+  <line class="rl" x1="480" y1="855" x2="758" y2="855" marker-end="url(#r)"/>
+  <text x="620" y="845" class="al">photo of the stone</text>
+  <text x="620" y="877" class="ar">missing: phone → GH</text>
+
+  <rect class="dash" x="760" y="830" width="440" height="130" rx="8"/>
+  <text x="780" y="863" class="t">9. Between the two contours?</text>
+  <text x="780" y="890" class="d">Its outline as in step 3, then</text>
+  <text x="780" y="914" class="d">min ⊂ stone ⊂ max?</text>
+  <text x="780" y="940" class="s">answer: fits / too small / too big</text>
+
+  <line class="ln" x1="760" y1="945" x2="482" y2="945" marker-end="url(#a)"/>
+  <text x="620" y="935" class="al">fits / too small / too big</text>
+  <text x="620" y="967" class="ag">short message</text>
+
+  <rect class="dash" x="40" y="920" width="440" height="110" rx="8"/>
+  <text x="60" y="953" class="t">10. Fits → sound</text>
+  <text x="60" y="980" class="d">Does not fit → next stone</text>
+  <text x="60" y="1004" class="s">(back to 8)</text>
+  <line class="ln" x1="260" y1="1030" x2="260" y2="1068" marker-end="url(#a)"/>
+
+  <rect class="dash" x="40" y="1070" width="440" height="90" rx="8"/>
+  <text x="60" y="1103" class="t">11. Button “New stone?”</text>
+  <text x="60" y="1130" class="d">Stone placed, next round</text>
+
+  <!-- loop back to 1 -->
+  <polyline class="gl" points="40,1115 20,1115 20,240 38,240" marker-end="url(#g)"/>
+  <text x="40" y="1195" class="gt">New stone → back to 1: photo of the layer as it is now</text>
+
+  <!-- legend -->
+  <rect class="box" x="40" y="1230" width="44" height="26" rx="4"/>
+  <text x="96" y="1250" class="d">built, tested on a photo file in Rhino 8 + GH</text>
+  <rect class="dash" x="640" y="1230" width="44" height="26" rx="4"/>
+  <text x="696" y="1250" class="d">to build</text>
+  <line class="ln" x1="40" y1="1285" x2="84" y2="1285" marker-end="url(#a)"/>
+  <text x="96" y="1291" class="d">GH → phone: course pipeline exists</text>
+  <line class="rl" x1="640" y1="1285" x2="684" y2="1285" marker-end="url(#r)"/>
+  <text x="696" y="1291" class="d">phone → GH: does not exist yet</text>
+
+  <!-- open points -->
+  <rect class="box" x="40" y="1320" width="1160" height="175" rx="8"/>
+  <text x="60" y="1353" class="t">Open technical points</text>
+  <text x="60" y="1385" class="d">1. Phone → GH (red): GH receiver built (<tspan class="m">phone-to-gh</tspan>, fake phone); Unity sender next.</text>
+  <text x="60" y="1414" class="d">2. Scale, pixels → cm: the camera height from AR (ARFoundation), or a printed marker.</text>
+  <text x="60" y="1443" class="d">3. Steps 7–8: the still contours are true size only if the phone is as high as in step 1.</text>
+  <text x="60" y="1472" class="d">4. Step 9 starts as a tap-photo; later live detection on the phone while it moves.</text>
+</svg>
